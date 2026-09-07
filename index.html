@@ -2,312 +2,507 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>動物園大亨 Zoo Land</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Zoo Land 3D - 動物園大亨</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-        body { background: #222; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        #game-container { position: relative; width: 100vw; height: 100vh; max-width: 600px; max-height: 900px; background: #68c062; overflow: hidden; }
-        #ui-bar { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
-        .ui-pill { background: rgba(0,0,0,0.7); color: #fff; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        canvas { width: 100%; height: 100%; display: block; }
-        #selection-modal, #offline-modal { position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; padding: 20px; }
-        .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; width: 100%; max-width: 320px; }
-        .select-card { background: #333; border: 2px solid #555; border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; transition: transform 0.1s; }
-        .select-card:active { transform: scale(0.95); border-color: #4CAF50; }
-        .select-card span { font-size: 32px; display: block; margin-bottom: 6px; }
-        .btn-action { background: #4CAF50; border: none; color: white; padding: 12px 28px; border-radius: 24px; font-weight: bold; font-size: 16px; margin-top: 16px; cursor: pointer; }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        body { background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        
+        /* 頂部資訊 HUD */
+        #ui-layer { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; pointer-events: none; z-index: 10; }
+        .hud-card { background: rgba(20, 20, 20, 0.75); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 10px 18px; border-radius: 30px; font-weight: bold; font-size: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+        
+        /* 虛擬搖桿 (手機專用) */
+        #joystick-zone { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; z-index: 20; display: none; }
+        .joystick-base { width: 120px; height: 120px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; position: relative; }
+        .joystick-thumb { width: 50px; height: 50px; background: #4CAF50; border-radius: 50%; position: absolute; top: 35px; left: 35px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+
+        /* 模態彈窗 (自選初始動物 & 離線收益) */
+        .modal-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; padding: 24px; }
+        .starter-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 24px; width: 100%; max-width: 360px; }
+        .starter-card { background: #2a2a2a; border: 2px solid #444; border-radius: 16px; padding: 20px 10px; text-align: center; cursor: pointer; transition: all 0.2s ease; }
+        .starter-card:hover { border-color: #4CAF50; transform: translateY(-4px); background: #333; }
+        .starter-card span { font-size: 40px; display: block; margin-bottom: 8px; }
+        .btn-confirm { background: #4CAF50; border: none; color: white; padding: 14px 36px; border-radius: 30px; font-weight: bold; font-size: 16px; margin-top: 24px; cursor: pointer; }
     </style>
+    <!-- 引入 Three.js 輕量化 3D 渲染庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="game-container">
-    <div id="ui-bar">
-        <div class="ui-pill" id="coin-display">💰 0</div>
-        <div class="ui-pill" id="level-display">⭐ 主角 Lv.1</div>
-        <div class="ui-pill" id="bag-display">🎒 0/3</div>
-    </div>
-    <canvas id="gameCanvas"></canvas>
+<div id="canvas-container"></div>
 
-    <!-- 初始動物自選面板 -->
-    <div id="selection-modal" style="display: none;">
-        <h2>🐾 歡迎來到 Zoo Land！</h2>
-        <p style="margin-top: 8px; color: #ccc;">請自選您的第一隻起始動物：</p>
-        <div class="card-grid">
-            <div class="select-card" onclick="chooseStarter('chicken')"><span>🐔</span>小雞</div>
-            <div class="select-card" onclick="chooseStarter('cow')"><span>🥛</span>乳牛</div>
-            <div class="select-card" onclick="chooseStarter('dog')"><span>🐕</span>小狗</div>
-            <div class="select-card" onclick="chooseStarter('pig')"><span>🐷</span>小豬</div>
-        </div>
-    </div>
+<div id="ui-layer">
+    <div class="hud-card" id="hud-coins">💰 0</div>
+    <div class="hud-card" id="hud-level">⭐ 主角 Lv.1</div>
+    <div class="hud-card" id="hud-bag">🎒 0/4</div>
+</div>
 
-    <!-- 離線收益面板 -->
-    <div id="offline-modal" style="display: none;">
-        <h2>🎉 歡迎回來！</h2>
-        <p style="margin-top: 12px;" id="offline-info">你在離開期間動物園為你賺取了：</p>
-        <h1 style="color: #ffd700; margin: 16px 0;" id="offline-coin-amount">+0 金幣</h1>
-        <button class="btn-action" onclick="claimOffline()">領取收益</button>
+<!-- 觸控螢幕搖桿區域 -->
+<div id="joystick-zone">
+    <div class="joystick-base" id="joy-base">
+        <div class="joystick-thumb" id="joy-thumb"></div>
     </div>
 </div>
 
+<!-- 初始自選動物彈窗 -->
+<div id="starter-modal" class="modal-mask" style="display: none;">
+    <h2>🌿 建立你的 3D 動物園</h2>
+    <p style="margin-top: 8px; color: #aaa;">挑選你的第一隻起始動物夥伴：</p>
+    <div class="starter-grid">
+        <div class="starter-card" onclick="selectStarter('cow')"><span>🥛</span>乳牛 (穩健型)</div>
+        <div class="starter-card" onclick="selectStarter('dog')"><span>🐕</span>小狗 (高互動)</div>
+        <div class="starter-card" onclick="selectStarter('chicken')"><span>🐔</span>小雞 (快速產出)</div>
+        <div class="starter-card" onclick="selectStarter('pig')"><span>🐷</span>小豬 (高利潤)</div>
+    </div>
+</div>
+
+<!-- 離線收益彈窗 -->
+<div id="offline-modal" class="modal-mask" style="display: none;">
+    <h2>🎉 歡迎回到 Zoo Land！</h2>
+    <p style="margin-top: 12px; color: #ccc;">離線期間遊客為您的展區投擲了：</p>
+    <h1 style="color: #ffd700; margin: 20px 0; font-size: 36px;" id="offline-val">+0 金幣</h1>
+    <button class="btn-confirm" onclick="claimOfflineReward()">開心收下</button>
+</div>
+
 <script>
-const ANIMAL_DB = {
-    chicken: { name: '小雞', icon: '🐔', levelReq: 1, baseIncome: 2, spawnRate: 3 },
-    cow:     { name: '乳牛', icon: '🥛', levelReq: 1, baseIncome: 4, spawnRate: 4 },
-    dog:     { name: '小狗', icon: '🐕', levelReq: 1, baseIncome: 3, spawnRate: 3 },
-    pig:     { name: '小豬', icon: '🐷', levelReq: 2, baseIncome: 6, spawnRate: 4 },
-    horse:   { name: '小馬', icon: '🐎', levelReq: 3, baseIncome: 18, spawnRate: 5 },
-    snake:   { name: '靈蛇', icon: '🐍', levelReq: 4, baseIncome: 50, spawnRate: 6 },
-    giraffe: { name: '長頸鹿', icon: '🦒', levelReq: 5, baseIncome: 140, spawnRate: 7 },
-    rhino:   { name: '犀牛', icon: '🦏', levelReq: 6, baseIncome: 400, spawnRate: 8 }
+// 遊戲數據定義庫
+const ANIMAL_CONFIG = {
+    chicken: { name: '小雞', emoji: '🐔', color: 0xffe082, income: 3, reqLv: 1 },
+    cow:     { name: '乳牛', emoji: '🥛', color: 0xffffff, income: 6, reqLv: 1 },
+    dog:     { name: '小狗', emoji: '🐕', color: 0xc48c46, income: 5, reqLv: 1 },
+    pig:     { name: '小豬', emoji: '🐷', color: 0xf48fb1, income: 10, reqLv: 2 },
+    horse:   { name: '小馬', emoji: '🐎', color: 0x8d6e63, income: 25, reqLv: 3 },
+    snake:   { name: '靈蛇', emoji: '🐍', color: 0x81c784, income: 60, reqLv: 4 },
+    giraffe: { name: '長頸鹿', emoji: '🦒', color: 0xffb74d, income: 160, reqLv: 5 },
+    rhino:   { name: '犀牛', emoji: '🦏', color: 0x90a4ae, income: 450, reqLv: 6 }
 };
 
-const UPGRADE_COSTS = [150, 450, 1200, 3500, 10000, 30000];
+const UPGRADE_COSTS = [200, 600, 1800, 5000, 15000, 999999];
+const SAVE_KEY = 'ZOOLAND_3D_STORAGE_V1';
 
 let gameState = {
     coins: 0,
     level: 1,
-    bagCapacity: 3,
+    bagCapacity: 4,
     bag: [],
-    pens: {},
+    penAnimals: {},
     unlockedAnimals: [],
-    lastTimestamp: Date.now()
+    lastTime: Date.now()
 };
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-let width, height;
-
-function resize() {
-    width = canvas.width = canvas.parentElement.clientWidth;
-    height = canvas.height = canvas.parentElement.clientHeight;
-}
-window.addEventListener('resize', resize);
-resize();
-
-// 存檔與讀檔系統
-const SAVE_KEY = 'ZOOLAND_SAVE_V1';
-
-function saveGame() {
-    gameState.lastTimestamp = Date.now();
+// 儲存與讀取系統
+function saveState() {
+    gameState.lastTime = Date.now();
     localStorage.setItem(SAVE_KEY, JSON.stringify(gameState));
 }
 
-function loadGame() {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) {
-        document.getElementById('selection-modal').style.display = 'flex';
+function loadState() {
+    const data = localStorage.getItem(SAVE_KEY);
+    if (!data) {
+        document.getElementById('starter-modal').style.display = 'flex';
         return;
     }
     try {
-        const saved = JSON.parse(raw);
-        gameState = { ...gameState, ...saved };
-        checkOfflineEarnings();
+        gameState = { ...gameState, ...JSON.parse(data) };
+        calcOffline();
     } catch(e) {
-        document.getElementById('selection-modal').style.display = 'flex';
+        document.getElementById('starter-modal').style.display = 'flex';
     }
 }
 
-function chooseStarter(type) {
+function selectStarter(type) {
     gameState.unlockedAnimals = [type];
-    gameState.pens[type] = { count: 0, max: 10 };
-    document.getElementById('selection-modal').style.display = 'none';
-    saveGame();
+    gameState.penAnimals[type] = 1;
+    document.getElementById('starter-modal').style.display = 'none';
+    spawnPenAnimalMesh(type);
+    saveState();
 }
 
-let pendingOfflineCoins = 0;
-function checkOfflineEarnings() {
-    const now = Date.now();
-    const diffSec = Math.min(Math.floor((now - (gameState.lastTimestamp || now)) / 1000), 28800);
-    if (diffSec > 10) {
+let pendingReward = 0;
+function calcOffline() {
+    const elapsedSec = Math.min(Math.floor((Date.now() - (gameState.lastTime || Date.now())) / 1000), 28800);
+    if (elapsedSec > 15) {
         let perSec = 0;
-        for (let k in gameState.pens) {
-            perSec += (gameState.pens[k].count || 0) * (ANIMAL_DB[k]?.baseIncome || 1) * 0.2;
+        for (let k in gameState.penAnimals) {
+            perSec += (gameState.penAnimals[k] || 0) * (ANIMAL_CONFIG[k]?.income || 1) * 0.25;
         }
-        pendingOfflineCoins = Math.floor(diffSec * perSec);
-        if (pendingOfflineCoins > 0) {
-            document.getElementById('offline-coin-amount').innerText = `+${pendingOfflineCoins} 💰`;
+        pendingReward = Math.floor(elapsedSec * perSec);
+        if (pendingReward > 0) {
+            document.getElementById('offline-val').innerText = `+${pendingReward} 💰`;
             document.getElementById('offline-modal').style.display = 'flex';
         }
     }
 }
 
-function claimOffline() {
-    gameState.coins += pendingOfflineCoins;
+function claimOfflineReward() {
+    gameState.coins += pendingReward;
     document.getElementById('offline-modal').style.display = 'none';
-    saveGame();
+    saveState();
 }
 
-// 角色與搖桿操作
-const player = { x: 200, y: 400, speed: 4, size: 24 };
-const joystick = { active: false, startX: 0, startY: 0, curX: 0, curY: 0, dx: 0, dy: 0 };
+// Three.js 3D 世界架構
+let scene, camera, renderer;
+let playerMesh, backpackGroup;
+let wildZoneCenter = new THREE.Vector3(-14, 0, -8);
+let penZoneCenter  = new THREE.Vector3(14, 0, -8);
+let upgradePadPos  = new THREE.Vector3(0, 0, 10);
 
-window.addEventListener('touchstart', (e) => {
-    const t = e.touches[0];
-    joystick.active = true;
-    joystick.startX = joystick.curX = t.clientX;
-    joystick.startY = joystick.curY = t.clientY;
-    joystick.dx = joystick.dy = 0;
-});
+let groundCoins = [];
+let wildAnimalMeshes = [];
+let penAnimalMeshes = [];
+let visitorMeshes = [];
 
-window.addEventListener('touchmove', (e) => {
-    if (!joystick.active) return;
-    const t = e.touches[0];
-    joystick.curX = t.clientX;
-    joystick.curY = t.clientY;
-    const dist = Math.hypot(t.clientX - joystick.startX, t.clientY - joystick.startY);
-    const maxR = 40;
-    const angle = Math.atan2(t.clientY - joystick.startY, t.clientX - joystick.startX);
-    joystick.dx = Math.cos(angle) * Math.min(dist / maxR, 1);
-    joystick.dy = Math.sin(angle) * Math.min(dist / maxR, 1);
-});
+function init3D() {
+    const container = document.getElementById('canvas-container');
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x7ac972);
+    scene.fog = new THREE.Fog(0x7ac972, 35, 75);
 
-window.addEventListener('touchend', () => { joystick.active = false; joystick.dx = 0; joystick.dy = 0; });
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 24, 22);
 
-// 鍵盤控制支援
-const keys = {};
-window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
-window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
 
-// 遊戲世界區域
-const wildZone = { x: 50, y: 80, w: 140, h: 140 };
-const penZone = { x: 230, y: 80, w: 140, h: 140 };
-const upgradeZone = { x: 140, y: 550, w: 120, h: 70 };
+    // 光照系統
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.7);
+    scene.add(hemiLight);
 
-let wildAnimals = [];
-let visitors = [];
+    const dirLight = new THREE.DirectionalLight(0xfffaed, 0.9);
+    dirLight.position.set(20, 40, 20);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    scene.add(dirLight);
 
-function spawnWildAnimal() {
-    if (wildAnimals.length >= 4 || gameState.unlockedAnimals.length === 0) return;
-    const randType = gameState.unlockedAnimals[Math.floor(Math.random() * gameState.unlockedAnimals.length)];
-    wildAnimals.push({
-        type: randType,
-        x: wildZone.x + 20 + Math.random() * (wildZone.w - 40),
-        y: wildZone.y + 20 + Math.random() * (wildZone.h - 40)
+    // 地面設計
+    const groundGeo = new THREE.PlaneGeometry(120, 120);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x5fa858, roughness: 0.9 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    createEnvironment();
+    createPlayer();
+    
+    // 初始化展區動物 3D 模型
+    for (let type in gameState.penAnimals) {
+        for (let i = 0; i < gameState.penAnimals[type]; i++) {
+            spawnPenAnimalMesh(type);
+        }
+    }
+    
+    spawnVisitors();
+    window.addEventListener('resize', onWindowResize);
+}
+
+// 建立 3D 場景區塊
+function createEnvironment() {
+    // 1. 野外捕捉區 (左側)
+    const wildFloor = new THREE.Mesh(
+        new THREE.CylinderGeometry(8, 8, 0.2, 32),
+        new THREE.MeshStandardMaterial({ color: 0x408d38 })
+    );
+    wildFloor.position.copy(wildZoneCenter);
+    wildFloor.receiveShadow = true;
+    scene.add(wildFloor);
+
+    // 2. 動物展區圍欄 (右側)
+    const penFloor = new THREE.Mesh(
+        new THREE.CylinderGeometry(9, 9, 0.2, 32),
+        new THREE.MeshStandardMaterial({ color: 0xd2b17a })
+    );
+    penFloor.position.copy(penZoneCenter);
+    penFloor.receiveShadow = true;
+    scene.add(penFloor);
+
+    // 3. 升級光圈站台 (中間下方)
+    const upPad = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.5, 3.5, 0.3, 32),
+        new THREE.MeshStandardMaterial({ color: 0xffa000, emissive: 0xff6f00, emissiveIntensity: 0.3 })
+    );
+    upPad.position.copy(upgradePadPos);
+    scene.add(upPad);
+}
+
+// 建立主角 3D 模型
+function createPlayer() {
+    playerMesh = new THREE.Group();
+    
+    // 身體
+    const bodyGeo = new THREE.CylinderGeometry(0.6, 0.6, 1.4, 16);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1e88e5 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.9;
+    body.castShadow = true;
+    playerMesh.add(body);
+
+    // 頭部
+    const headGeo = new THREE.SphereGeometry(0.5, 16, 16);
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xffcc80 });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = 1.9;
+    head.castShadow = true;
+    playerMesh.add(head);
+
+    // 背包堆疊容器
+    backpackGroup = new THREE.Group();
+    backpackGroup.position.set(0, 1.2, -0.6);
+    playerMesh.add(backpackGroup);
+
+    playerMesh.position.set(0, 0, 0);
+    scene.add(playerMesh);
+}
+
+// 更新背包 3D 動物堆疊
+function updateBackpackMesh() {
+    while(backpackGroup.children.length > 0) {
+        backpackGroup.remove(backpackGroup.children[0]);
+    }
+    gameState.bag.forEach((type, idx) => {
+        const conf = ANIMAL_CONFIG[type] || { color: 0xffffff };
+        const bGeo = new THREE.BoxGeometry(0.7, 0.6, 0.7);
+        const bMat = new THREE.MeshStandardMaterial({ color: conf.color });
+        const box = new THREE.Mesh(bGeo, bMat);
+        box.position.y = idx * 0.7;
+        box.castShadow = true;
+        backpackGroup.add(box);
     });
 }
-setInterval(spawnWildAnimal, 2000);
 
-// 遊客定時給錢
+// 動態生成 3D 實體地面金幣
+function dropCoinAt(x, z) {
+    const coinGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 12);
+    const coinMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2, emissive: 0xcc9a00, emissiveIntensity: 0.4 });
+    const mesh = new THREE.Mesh(coinGeo, coinMat);
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.set(x + (Math.random() - 0.5) * 2, 0.3, z + (Math.random() - 0.5) * 2);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    groundCoins.push({ mesh, value: 10 + gameState.level * 5, rotSpeed: 0.04 + Math.random() * 0.03 });
+}
+
+// 生成野外動物
+function spawnWildAnimal() {
+    if (wildAnimalMeshes.length >= 5 || gameState.unlockedAnimals.length === 0) return;
+    const type = gameState.unlockedAnimals[Math.floor(Math.random() * gameState.unlockedAnimals.length)];
+    const conf = ANIMAL_CONFIG[type];
+
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 0.8, 0.9),
+        new THREE.MeshStandardMaterial({ color: conf.color })
+    );
+    const r = Math.random() * 5.5;
+    const ang = Math.random() * Math.PI * 2;
+    mesh.position.set(wildZoneCenter.x + Math.cos(ang) * r, 0.4, wildZoneCenter.z + Math.sin(ang) * r);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    wildAnimalMeshes.push({ mesh, type });
+}
+setInterval(spawnWildAnimal, 2200);
+
+// 生成展區內活動的 3D 動物
+function spawnPenAnimalMesh(type) {
+    const conf = ANIMAL_CONFIG[type] || { color: 0xffffff };
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.7, 0.8),
+        new THREE.MeshStandardMaterial({ color: conf.color })
+    );
+    const r = Math.random() * 6.5;
+    const ang = Math.random() * Math.PI * 2;
+    mesh.position.set(penZoneCenter.x + Math.cos(ang) * r, 0.4, penZoneCenter.z + Math.sin(ang) * r);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    penAnimalMeshes.push({ mesh, targetX: mesh.position.x, targetZ: mesh.position.z });
+}
+
+// 建立遊客與掉錢機制
+function spawnVisitors() {
+    for (let i = 0; i < 4; i++) {
+        const vis = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.5, 0.5, 1.2, 12),
+            new THREE.MeshStandardMaterial({ color: 0xe91e63 })
+        );
+        const ang = (i / 4) * Math.PI * 2;
+        vis.position.set(penZoneCenter.x + Math.cos(ang) * 11, 0.6, penZoneCenter.z + Math.sin(ang) * 11);
+        vis.castShadow = true;
+        scene.add(vis);
+        visitorMeshes.push(vis);
+    }
+}
+
+// 遊客定期向地面拋擲金幣
 setInterval(() => {
-    let totalIncome = 0;
-    for (let k in gameState.pens) {
-        totalIncome += (gameState.pens[k].count || 0) * ANIMAL_DB[k].baseIncome;
+    let totalAnimals = 0;
+    for (let k in gameState.penAnimals) totalAnimals += gameState.penAnimals[k];
+    if (totalAnimals > 0) {
+        visitorMeshes.forEach(vis => {
+            if (Math.random() > 0.3) {
+                dropCoinAt(vis.position.x, vis.position.z);
+            }
+        });
     }
-    if (totalIncome > 0) {
-        gameState.coins += totalIncome;
+}, 2500);
+
+// 移動控制邏輯 (鍵盤 + 虛擬搖桿)
+const moveDir = { x: 0, z: 0 };
+const keys = {};
+window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// 觸控虛擬搖桿
+const joyZone = document.getElementById('joystick-zone');
+const joyThumb = document.getElementById('joy-thumb');
+let joyTouchId = null, joyStart = { x: 0, y: 0 };
+
+if ('ontouchstart' in window) {
+    joyZone.style.display = 'block';
+}
+
+window.addEventListener('touchstart', e => {
+    if (joyTouchId !== null) return;
+    const t = e.changedTouches[0];
+    if (t.clientX < window.innerWidth * 0.5 && t.clientY > window.innerHeight * 0.4) {
+        joyTouchId = t.identifier;
+        joyStart = { x: t.clientX, y: t.clientY };
     }
-}, 1500);
+});
+
+window.addEventListener('touchmove', e => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === joyTouchId) {
+            const dx = t.clientX - joyStart.x;
+            const dy = t.clientY - joyStart.y;
+            const dist = Math.hypot(dx, dy);
+            const maxR = 40;
+            const normX = dx / (dist || 1);
+            const normY = dy / (dist || 1);
+            const moveR = Math.min(dist, maxR);
+            joyThumb.style.transform = `translate(${normX * moveR}px, ${normY * moveR}px)`;
+            moveDir.x = (dx / maxR);
+            moveDir.z = (dy / maxR);
+        }
+    }
+});
+
+function resetJoystick() {
+    joyTouchId = null;
+    joyThumb.style.transform = 'translate(0px, 0px)';
+    moveDir.x = 0; moveDir.z = 0;
+}
+window.addEventListener('touchend', resetJoystick);
+window.addEventListener('touchcancel', resetJoystick);
 
 // 遊戲主循環
-function update() {
-    let mx = joystick.dx;
-    let my = joystick.dy;
-    if (keys['w'] || keys['arrowup']) my = -1;
-    if (keys['s'] || keys['arrowdown']) my = 1;
+const clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+
+    // 1. 計算輸入移動
+    let mx = moveDir.x;
+    let mz = moveDir.z;
+    if (keys['w'] || keys['arrowup']) mz = -1;
+    if (keys['s'] || keys['arrowdown']) mz = 1;
     if (keys['a'] || keys['arrowleft']) mx = -1;
     if (keys['d'] || keys['arrowright']) mx = 1;
 
-    player.x = Math.max(20, Math.min(width - 20, player.x + mx * player.speed));
-    player.y = Math.max(20, Math.min(height - 20, player.y + my * player.speed));
+    const len = Math.hypot(mx, mz);
+    if (len > 0.1) {
+        const speed = 10;
+        playerMesh.position.x += (mx / len) * speed * delta;
+        playerMesh.position.z += (mz / len) * speed * delta;
+        playerMesh.rotation.y = Math.atan2(mx, mz);
+    }
 
-    // 採集野外動物
-    for (let i = wildAnimals.length - 1; i >= 0; i--) {
-        const a = wildAnimals[i];
-        if (Math.hypot(player.x - a.x, player.y - a.y) < 30 && gameState.bag.length < gameState.bagCapacity) {
+    // 限制玩家活動範圍
+    playerMesh.position.x = Math.max(-28, Math.min(28, playerMesh.position.x));
+    playerMesh.position.z = Math.max(-24, Math.min(24, playerMesh.position.z));
+
+    // 鏡頭平滑跟隨
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, playerMesh.position.x, 0.08);
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, playerMesh.position.z + 18, 0.08);
+    camera.lookAt(playerMesh.position.x, 0, playerMesh.position.z);
+
+    // 2. 金幣旋轉與吸附拾取 (走過自動拾取)
+    for (let i = groundCoins.length - 1; i >= 0; i--) {
+        const c = groundCoins[i];
+        c.mesh.rotation.z += c.rotSpeed;
+        const d = playerMesh.position.distanceTo(c.mesh.position);
+        if (d < 2.2) {
+            // 拾取金幣
+            gameState.coins += c.value;
+            scene.remove(c.mesh);
+            groundCoins.splice(i, 1);
+        }
+    }
+
+    // 3. 野外動物捕捉判定
+    for (let i = wildAnimalMeshes.length - 1; i >= 0; i--) {
+        const a = wildAnimalMeshes[i];
+        if (playerMesh.position.distanceTo(a.mesh.position) < 2.0 && gameState.bag.length < gameState.bagCapacity) {
             gameState.bag.push(a.type);
-            wildAnimals.splice(i, 1);
+            scene.remove(a.mesh);
+            wildAnimalMeshes.splice(i, 1);
+            updateBackpackMesh();
         }
     }
 
-    // 將動物放入展區
-    if (Math.hypot(player.x - (penZone.x + penZone.w/2), player.y - (penZone.y + penZone.h/2)) < 60) {
-        while (gameState.bag.length > 0) {
-            const animal = gameState.bag.pop();
-            if (!gameState.pens[animal]) gameState.pens[animal] = { count: 0 };
-            gameState.pens[animal].count++;
-        }
+    // 4. 展區卸貨判定 (將背上的動物放入展區)
+    if (playerMesh.position.distanceTo(penZoneCenter) < 7.5 && gameState.bag.length > 0) {
+        const type = gameState.bag.pop();
+        gameState.penAnimals[type] = (gameState.penAnimals[type] || 0) + 1;
+        spawnPenAnimalMesh(type);
+        updateBackpackMesh();
+        saveState();
     }
 
-    // 主角升級站判定
+    // 5. 踩上光圈升級判定
     const cost = UPGRADE_COSTS[gameState.level - 1] || 999999;
-    if (Math.hypot(player.x - (upgradeZone.x + upgradeZone.w/2), player.y - (upgradeZone.y + upgradeZone.h/2)) < 50) {
+    if (playerMesh.position.distanceTo(upgradePadPos) < 3.2) {
         if (gameState.coins >= cost && gameState.level < 6) {
             gameState.coins -= cost;
             gameState.level++;
-            // 解鎖對應等級動物
-            for (let k in ANIMAL_DB) {
-                if (ANIMAL_DB[k].levelReq <= gameState.level && !gameState.unlockedAnimals.includes(k)) {
+            // 解鎖對應新動物
+            for (let k in ANIMAL_CONFIG) {
+                if (ANIMAL_CONFIG[k].reqLv <= gameState.level && !gameState.unlockedAnimals.includes(k)) {
                     gameState.unlockedAnimals.push(k);
                 }
             }
-            saveGame();
+            saveState();
         }
     }
 
-    // 更新 UI
-    document.getElementById('coin-display').innerText = `💰 ${gameState.coins}`;
-    document.getElementById('level-display').innerText = `⭐ 主角 Lv.${gameState.level}`;
-    document.getElementById('bag-display').innerText = `🎒 ${gameState.bag.length}/${gameState.bagCapacity}`;
+    // 更新 UI HUD
+    document.getElementById('hud-coins').innerText = `💰 ${gameState.coins}`;
+    document.getElementById('hud-level').innerText = `⭐ 主角 Lv.${gameState.level} (升級: ${cost >= 999999 ? 'MAX' : cost})`;
+    document.getElementById('hud-bag').innerText = `🎒 ${gameState.bag.length}/${gameState.bagCapacity}`;
+
+    renderer.render(scene, camera);
 }
 
-function render() {
-    ctx.clearRect(0, 0, width, height);
-
-    // 繪製野外探索區
-    ctx.fillStyle = '#4a9c46';
-    ctx.fillRect(wildZone.x, wildZone.y, wildZone.w, wildZone.h);
-    ctx.strokeStyle = '#fff';
-    ctx.strokeRect(wildZone.x, wildZone.y, wildZone.w, wildZone.h);
-    ctx.fillStyle = '#fff';
-    ctx.font = '12px sans-serif';
-    ctx.fillText('🌲 野外捕捉區', wildZone.x + 10, wildZone.y - 8);
-
-    // 繪製展區
-    ctx.fillStyle = '#d2b48c';
-    ctx.fillRect(penZone.x, penZone.y, penZone.w, penZone.h);
-    ctx.strokeRect(penZone.x, penZone.y, penZone.w, penZone.h);
-    ctx.fillStyle = '#000';
-    let penCount = 0;
-    for (let k in gameState.pens) penCount += gameState.pens[k].count || 0;
-    ctx.fillText(`🦁 展區 (動物: ${penCount})`, penZone.x + 10, penZone.y - 8);
-
-    // 繪製升級台
-    const cost = UPGRADE_COSTS[gameState.level - 1] || 'MAX';
-    ctx.fillStyle = '#ff9800';
-    ctx.fillRect(upgradeZone.x, upgradeZone.y, upgradeZone.w, upgradeZone.h);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(`⭐ 升級站`, upgradeZone.x + 30, upgradeZone.y + 28);
-    ctx.fillText(`💰 ${cost}`, upgradeZone.x + 35, upgradeZone.y + 48);
-
-    // 繪製野外動物
-    ctx.font = '20px sans-serif';
-    wildAnimals.forEach(a => ctx.fillText(ANIMAL_DB[a.type]?.icon || '🐾', a.x, a.y));
-
-    // 繪製主角與背包堆疊
-    ctx.fillStyle = '#2196F3';
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
-    ctx.fill();
-
-    gameState.bag.forEach((type, idx) => {
-        ctx.font = '14px sans-serif';
-        ctx.fillText(ANIMAL_DB[type]?.icon || '🐾', player.x - 7, player.y - 25 - (idx * 16));
-    });
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function loop() {
-    update();
-    render();
-    requestAnimationFrame(loop);
-}
+// 啟動初始化
+loadState();
+init3D();
+animate();
 
-// 啟動
-loadGame();
-setInterval(saveGame, 3000);
-window.addEventListener('beforeunload', saveGame);
-loop();
+// 週期性存檔
+setInterval(saveState, 3000);
+window.addEventListener('beforeunload', saveState);
 </script>
 </body>
 </html>
