@@ -2,36 +2,191 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- 徹底鎖死視口縮放，禁止雙指捏合與點擊放大 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Zoo Land 3D - 可愛動物園大亨</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-        body { background: #161b13; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
-        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+            user-select: none; 
+            -webkit-user-select: none; 
+            -webkit-touch-callout: none;
+        }
         
-        /* 頂部 HUD 狀態欄 */
-        #ui-layer { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; pointer-events: none; z-index: 10; }
-        .hud-card { background: rgba(25, 33, 22, 0.9); backdrop-filter: blur(10px); border: 1.5px solid rgba(255, 255, 255, 0.25); color: #fff; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.4); display: flex; align-items: center; gap: 6px; }
-        .hud-btn { pointer-events: auto; cursor: pointer; background: #3b82f6; border-color: #60a5fa; transition: transform 0.1s; }
-        .hud-btn:active { transform: scale(0.95); }
-        #save-indicator { font-size: 12px; color: #a7f3d0; opacity: 0; transition: opacity 0.3s; }
+        /* 鎖死 HTML 與 Body 滾動與縮放 */
+        html, body { 
+            position: fixed;
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            background: #161b13; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            touch-action: none; /* 關鍵：阻止所有原生瀏覽器手勢縮放 */
+        }
 
-        /* 全螢幕懸浮動態搖桿 (非移動時 hidden) */
-        #dynamic-joystick { position: absolute; width: 120px; height: 120px; pointer-events: none; z-index: 50; display: none; transform: translate(-50%, -50%); }
-        .joy-base { width: 120px; height: 120px; background: rgba(255,255,255,0.22); border: 2px solid rgba(255,255,255,0.5); border-radius: 50%; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.3); }
-        .joy-thumb { width: 48px; height: 48px; background: #68b92e; border: 2px solid #fff; border-radius: 50%; position: absolute; top: 36px; left: 36px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        #canvas-container { 
+            width: 100%; 
+            height: 100%; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            touch-action: none;
+        }
+        
+        /* 頂部 HUD 狀態欄 (適配瀏海屏安全區域) */
+        #ui-layer { 
+            position: fixed; 
+            top: max(10px, env(safe-area-inset-top)); 
+            left: max(10px, env(safe-area-inset-left)); 
+            right: max(10px, env(safe-area-inset-right)); 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 6px; 
+            justify-content: space-between; 
+            align-items: center;
+            pointer-events: none; 
+            z-index: 100; 
+        }
+        
+        .hud-card { 
+            background: rgba(25, 33, 22, 0.92); 
+            backdrop-filter: blur(10px); 
+            border: 1.5px solid rgba(255, 255, 255, 0.25); 
+            color: #fff; 
+            padding: 6px 12px; 
+            border-radius: 18px; 
+            font-weight: bold; 
+            font-size: 13px; 
+            box-shadow: 0 4px 14px rgba(0,0,0,0.4); 
+            display: flex; 
+            align-items: center; 
+            gap: 5px; 
+            white-space: nowrap;
+        }
+        
+        .hud-btn { 
+            pointer-events: auto; 
+            cursor: pointer; 
+            background: #2563eb; 
+            border-color: #60a5fa; 
+            transition: transform 0.1s, background-color 0.2s; 
+        }
+        .hud-btn:active { 
+            transform: scale(0.92); 
+            background: #1d4ed8;
+        }
+
+        #save-indicator { 
+            font-size: 11px; 
+            color: #a7f3d0; 
+            opacity: 0; 
+            transition: opacity 0.3s; 
+        }
+
+        /* 全螢幕懸浮動態搖桿 (非移動時隱藏) */
+        #dynamic-joystick { 
+            position: absolute; 
+            width: 120px; 
+            height: 120px; 
+            pointer-events: none; 
+            z-index: 50; 
+            display: none; 
+            transform: translate(-50%, -50%); 
+        }
+        .joy-base { 
+            width: 120px; 
+            height: 120px; 
+            background: rgba(255,255,255,0.22); 
+            border: 2px solid rgba(255,255,255,0.5); 
+            border-radius: 50%; 
+            position: relative; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.3); 
+        }
+        .joy-thumb { 
+            width: 48px; 
+            height: 48px; 
+            background: #68b92e; 
+            border: 2px solid #fff; 
+            border-radius: 50%; 
+            position: absolute; 
+            top: 36px; 
+            left: 36px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5); 
+        }
 
         /* 模態視窗 */
-        .modal-mask { position: absolute; inset: 0; background: rgba(10, 15, 10, 0.92); backdrop-filter: blur(12px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; padding: 24px; }
-        .starter-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 24px; width: 100%; max-width: 360px; }
-        .starter-card { background: #263321; border: 2px solid #476839; border-radius: 20px; padding: 18px 10px; text-align: center; cursor: pointer; transition: all 0.2s ease; }
-        .starter-card:hover, .starter-card:active { border-color: #8ce648; transform: translateY(-4px) scale(1.02); background: #34472c; }
-        .starter-card span { font-size: 44px; display: block; margin-bottom: 6px; }
-        .btn-confirm { background: #68b92e; border: none; color: white; padding: 12px 36px; border-radius: 30px; font-weight: bold; font-size: 16px; margin-top: 20px; cursor: pointer; box-shadow: 0 4px 15px rgba(104, 185, 46, 0.5); }
+        .modal-mask { 
+            position: fixed; 
+            inset: 0; 
+            background: rgba(10, 15, 10, 0.92); 
+            backdrop-filter: blur(12px); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 200; 
+            color: white; 
+            padding: 24px; 
+            touch-action: none;
+        }
+        .starter-grid { 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 16px; 
+            margin-top: 20px; 
+            width: 100%; 
+            max-width: 340px; 
+        }
+        .starter-card { 
+            background: #263321; 
+            border: 2px solid #476839; 
+            border-radius: 18px; 
+            padding: 16px 10px; 
+            text-align: center; 
+            cursor: pointer; 
+            transition: all 0.2s ease; 
+        }
+        .starter-card:hover, .starter-card:active { 
+            border-color: #8ce648; 
+            transform: translateY(-3px) scale(1.02); 
+            background: #34472c; 
+        }
+        .starter-card span { 
+            font-size: 40px; 
+            display: block; 
+            margin-bottom: 6px; 
+        }
+        .btn-confirm { 
+            background: #68b92e; 
+            border: none; 
+            color: white; 
+            padding: 12px 36px; 
+            border-radius: 30px; 
+            font-weight: bold; 
+            font-size: 16px; 
+            margin-top: 18px; 
+            cursor: pointer; 
+            box-shadow: 0 4px 15px rgba(104, 185, 46, 0.5); 
+        }
         
-        .stats-table { width: 100%; max-width: 420px; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
-        .stats-table th, .stats-table td { padding: 8px 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.15); }
-        .stats-table th { background: rgba(255,255,255,0.1); color: #ffd700; }
+        .stats-table { 
+            width: 100%; 
+            max-width: 420px; 
+            border-collapse: collapse; 
+            margin-top: 14px; 
+            font-size: 13px; 
+        }
+        .stats-table th, .stats-table td { 
+            padding: 8px 6px; 
+            text-align: center; 
+            border-bottom: 1px solid rgba(255,255,255,0.15); 
+        }
+        .stats-table th { 
+            background: rgba(255,255,255,0.1); 
+            color: #ffd700; 
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -39,7 +194,7 @@
 
 <div id="canvas-container"></div>
 
-<!-- 頂部 HUD -->
+<!-- 頂部 HUD (永不消失與縮放) -->
 <div id="ui-layer">
     <div class="hud-card" id="hud-coins">💰 0</div>
     <div class="hud-card" id="hud-income" style="color: #ffd700;">⚡ +0/秒</div>
@@ -71,7 +226,7 @@
 <!-- 園區財務報表 -->
 <div id="stats-modal" class="modal-mask" style="display: none;">
     <h2>📊 動物園營運財務報表</h2>
-    <p style="margin-top: 6px; color: #aaa;">即時展區產值與物種清單</p>
+    <p style="margin-top: 6px; color: #aaa;">即時展區產值與書包容量概況</p>
     <table class="stats-table">
         <thead>
             <tr>
@@ -96,6 +251,21 @@
 </div>
 
 <script>
+// 防縮放底層攔截器 (防止 iOS Safari 手勢放大)
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('gesturechange', (e) => e.preventDefault());
+document.addEventListener('gestureend', (e) => e.preventDefault());
+
+let lastTouchTime = 0;
+document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchTime <= 300) {
+        e.preventDefault(); // 禁止雙擊放大
+    }
+    lastTouchTime = now;
+}, { passive: false });
+
+// 動物數值與屬性庫
 const ANIMAL_CONFIG = {
     chicken: { name: '小雞', emoji: '🐔', color: '#FFF3B0', income: 3, reqLv: 1 },
     cow:     { name: '乳牛', emoji: '🐮', color: '#FFFFFF', income: 6, reqLv: 1 },
@@ -107,9 +277,10 @@ const ANIMAL_CONFIG = {
     rhino:   { name: '犀牛', emoji: '🦏', color: '#E2E8F0', income: 450, reqLv: 6 }
 };
 
+// 🎒 各等級對應的書包容量
+const BAG_CAPACITY_TIERS = [4, 6, 8, 10, 12, 15];
 const UPGRADE_COSTS = [200, 600, 1800, 5000, 15000, 999999];
-// 統一持久化儲存 Key
-const STORAGE_KEY = 'ZOOLAND_PERSISTENT_DATA_PROD';
+const STORAGE_KEY = 'ZOOLAND_PERSISTENT_DATA_PROD_V4';
 
 let gameState = {
     coins: 0,
@@ -121,7 +292,12 @@ let gameState = {
     lastTime: Date.now()
 };
 
-// 💾 高可靠度自動存檔模組 (防抖 + 即時落盤)
+// 根據當前等級更新書包容量
+function updateBagCapacityByLevel() {
+    gameState.bagCapacity = BAG_CAPACITY_TIERS[gameState.level - 1] || 15;
+}
+
+// 存檔模組
 let saveTimer = null;
 function flashSaveIndicator() {
     const el = document.getElementById('save-indicator');
@@ -138,7 +314,7 @@ function saveState(immediate = false) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(gameState));
             flashSaveIndicator();
         } catch(err) {
-            console.error('LocalStorage Save Error:', err);
+            console.error('Save Error:', err);
         }
     };
 
@@ -147,11 +323,10 @@ function saveState(immediate = false) {
         doSave();
     } else {
         if (saveTimer) clearTimeout(saveTimer);
-        saveTimer = setTimeout(doSave, 300); // 300ms 防抖
+        saveTimer = setTimeout(doSave, 300);
     }
 }
 
-// 📂 讀取存檔
 function loadState() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -159,14 +334,14 @@ function loadState() {
             const parsed = JSON.parse(raw);
             if (parsed && Array.isArray(parsed.unlockedAnimals) && parsed.unlockedAnimals.length > 0) {
                 gameState = { ...gameState, ...parsed };
+                updateBagCapacityByLevel(); // 確保書包容量與等級同步
                 calcOffline();
-                return true; // 成功加載有效進度
+                return true;
             }
         }
     } catch(err) {
-        console.error('LocalStorage Load Error:', err);
+        console.error('Load Error:', err);
     }
-    // 無存檔，彈出自選開局
     document.getElementById('starter-modal').style.display = 'flex';
     return false;
 }
@@ -174,6 +349,8 @@ function loadState() {
 function selectStarter(type) {
     gameState.unlockedAnimals = [type];
     gameState.penAnimals = { [type]: 1 };
+    gameState.level = 1;
+    updateBagCapacityByLevel();
     document.getElementById('starter-modal').style.display = 'none';
     spawnPenAnimalSprite(type);
     saveState(true);
@@ -210,7 +387,7 @@ function openStatsModal() {
         `;
         tbody.appendChild(tr);
     }
-    document.getElementById('stats-total-income').innerText = `全園預估總產能：約 +${calculateIncomePerSec()} 💰/秒`;
+    document.getElementById('stats-total-income').innerText = `全園預估總產能：約 +${calculateIncomePerSec()} 💰/秒 (書包上限: ${gameState.bagCapacity} 隻)`;
     document.getElementById('stats-modal').style.display = 'flex';
 }
 
@@ -286,12 +463,12 @@ function createLocationBannerTexture(title, subtitle, badgeColor) {
     ctx.stroke();
 
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 38px sans-serif';
+    ctx.font = 'bold 36px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(title, 256, 80);
 
     ctx.fillStyle = badgeColor;
-    ctx.font = 'bold 26px sans-serif';
+    ctx.font = 'bold 24px sans-serif';
     ctx.fillText(subtitle, 256, 134);
 
     const tex = new THREE.CanvasTexture(c);
@@ -299,7 +476,7 @@ function createLocationBannerTexture(title, subtitle, badgeColor) {
     return tex;
 }
 
-// 3D 場景
+// 3D 場景建構
 let scene, camera, renderer;
 let playerGroup, playerSprite, bagSpriteGroup;
 
@@ -323,8 +500,9 @@ function init3D() {
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 24, 22);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
@@ -346,16 +524,14 @@ function init3D() {
     createEnvironment();
     create2DPlayer();
     
-    // 還原展區所有已保存動物
     for (let type in gameState.penAnimals) {
         for (let i = 0; i < gameState.penAnimals[type]; i++) {
             spawnPenAnimalSprite(type);
         }
     }
-    // 還原背包外觀
     updateBackpackSprites();
-    
     spawnVisitors();
+    
     window.addEventListener('resize', onWindowResize);
 }
 
@@ -419,10 +595,11 @@ function createEnvironment() {
 function updateUpgradeBanner() {
     if (upgradeBannerSprite) scene.remove(upgradeBannerSprite);
     const cost = UPGRADE_COSTS[gameState.level - 1] || 'MAX';
-    const text = cost === 'MAX' ? '已達最高等級' : `踩入升級: 💰 ${cost}`;
+    const nextCap = BAG_CAPACITY_TIERS[gameState.level] || 15;
+    const text = cost === 'MAX' ? '已達滿級' : `升級:💰${cost} (書包升至${nextCap}格)`;
     const upTex = createLocationBannerTexture(`⭐ 主角升級台 (Lv.${gameState.level})`, text, '#F56565');
     upgradeBannerSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: upTex }));
-    upgradeBannerSprite.scale.set(6.5, 2.4, 1);
+    upgradeBannerSprite.scale.set(7.0, 2.6, 1);
     upgradeBannerSprite.position.set(upgradePadPos.x, 4.2, upgradePadPos.z + 4.2);
     scene.add(upgradeBannerSprite);
 }
@@ -455,7 +632,7 @@ function updateBackpackSprites() {
         const tex = getCuteSpriteTexture(conf.emoji, conf.color);
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
         sp.scale.set(1.4, 1.4, 1);
-        sp.position.set(0, (idx + 1) * 1.1, 0);
+        sp.position.set(0, (idx + 1) * 0.95, 0);
         bagSpriteGroup.add(sp);
     });
 }
@@ -533,15 +710,18 @@ setInterval(() => {
     }
 }, 1800);
 
-// 全螢幕懸浮搖桿
+// ⭐ 全螢幕動態搖桿（防止手勢穿透與意外縮放）
 const joyContainer = document.getElementById('dynamic-joystick');
 const joyThumb = document.getElementById('joy-thumb');
+let activeTouchId = null;
 let isPointerDown = false;
 let joyOrigin = { x: 0, y: 0 };
 const moveDir = { x: 0, z: 0 };
 
 function handlePointerStart(clientX, clientY) {
-    if (clientY < 70) return;
+    // 忽略頂部按鈕區域
+    if (clientY < 75) return;
+    
     isPointerDown = true;
     joyOrigin = { x: clientX, y: clientY };
     joyContainer.style.left = `${clientX}px`;
@@ -568,25 +748,46 @@ function handlePointerMove(clientX, clientY) {
 
 function handlePointerEnd() {
     isPointerDown = false;
+    activeTouchId = null;
     joyContainer.style.display = 'none';
     moveDir.x = 0; moveDir.z = 0;
 }
 
+// 觸控監聽 (嚴格鎖定首個有效觸摸，防止多指縮放)
 window.addEventListener('touchstart', e => {
-    const t = e.touches[0];
-    handlePointerStart(t.clientX, t.clientY);
-}, { passive: true });
+    if (activeTouchId !== null) return;
+    const t = e.changedTouches[0];
+    if (t.clientY >= 75) {
+        activeTouchId = t.identifier;
+        handlePointerStart(t.clientX, t.clientY);
+    }
+}, { passive: false });
 
 window.addEventListener('touchmove', e => {
-    const t = e.touches[0];
-    handlePointerMove(t.clientX, t.clientY);
-}, { passive: true });
+    if (activeTouchId === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === activeTouchId) {
+            handlePointerMove(t.clientX, t.clientY);
+            e.preventDefault(); // 阻止畫面滾動/縮放
+            break;
+        }
+    }
+}, { passive: false });
 
-window.addEventListener('touchend', handlePointerEnd);
+window.addEventListener('touchend', e => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === activeTouchId) {
+            handlePointerEnd();
+            break;
+        }
+    }
+});
 window.addEventListener('touchcancel', handlePointerEnd);
 
+// 滑鼠拖曳支援
 window.addEventListener('mousedown', e => {
-    if (e.button === 0) handlePointerStart(e.clientX, e.clientY);
+    if (e.button === 0 && e.clientY >= 75) handlePointerStart(e.clientX, e.clientY);
 });
 window.addEventListener('mousemove', e => {
     if (isPointerDown) handlePointerMove(e.clientX, e.clientY);
@@ -630,13 +831,13 @@ function animate() {
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, playerGroup.position.z + 18, 0.08);
     camera.lookAt(playerGroup.position.x, 0, playerGroup.position.z);
 
-    // 2. 展區動物漫步
+    // 2. 展區動物微幅漫步
     penAnimalSprites.forEach(p => {
         p.sprite.position.x = p.basePos.x + Math.sin(elapsedTime + p.wanderOffset) * 0.8;
         p.sprite.position.z = p.basePos.z + Math.cos(elapsedTime + p.wanderOffset) * 0.8;
     });
 
-    // 3. 中央金幣吸附 (拾取後即時防抖存檔)
+    // 3. 中央收銀總站金幣吸附
     let pickedCoin = false;
     for (let i = groundCoins.length - 1; i >= 0; i--) {
         const c = groundCoins[i];
@@ -654,7 +855,7 @@ function animate() {
     }
     if (pickedCoin) saveState(false);
 
-    // 4. 野外動物捕捉
+    // 4. 野外動物捕捉 (受升級後的書包容量限制)
     for (let i = wildAnimalSprites.length - 1; i >= 0; i--) {
         const a = wildAnimalSprites[i];
         if (playerGroup.position.distanceTo(a.sprite.position) < 2.2 && gameState.bag.length < gameState.bagCapacity) {
@@ -666,7 +867,7 @@ function animate() {
         }
     }
 
-    // 5. 展區卸貨入駐 (即時強制落盤)
+    // 5. 展區卸貨入駐
     if (playerGroup.position.distanceTo(penZoneCenter) < 7.5 && gameState.bag.length > 0) {
         const type = gameState.bag.pop();
         gameState.penAnimals[type] = (gameState.penAnimals[type] || 0) + 1;
@@ -675,12 +876,13 @@ function animate() {
         saveState(true);
     }
 
-    // 6. 升級判定 (即時強制落盤)
+    // 6. 升級判定 (升級等級 + 升級書包容量 + 解鎖新動物)
     const cost = UPGRADE_COSTS[gameState.level - 1] || 999999;
     if (playerGroup.position.distanceTo(upgradePadPos) < 3.2) {
         if (gameState.coins >= cost && gameState.level < 6) {
             gameState.coins -= cost;
             gameState.level++;
+            updateBagCapacityByLevel(); // ⭐ 核心：同步提升書包容量
             for (let k in ANIMAL_CONFIG) {
                 if (ANIMAL_CONFIG[k].reqLv <= gameState.level && !gameState.unlockedAnimals.includes(k)) {
                     gameState.unlockedAnimals.push(k);
@@ -705,6 +907,7 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 }
 
 // 啟動入口
@@ -712,7 +915,7 @@ loadState();
 init3D();
 animate();
 
-// 週期備份存檔 & 退出前強制存檔
+// 自動備份存檔
 setInterval(() => saveState(true), 2500);
 window.addEventListener('pagehide', () => saveState(true));
 window.addEventListener('visibilitychange', () => {
