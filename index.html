@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>動物園大亨 Zoo Land</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { background: #222; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        #game-container { position: relative; width: 100vw; height: 100vh; max-width: 600px; max-height: 900px; background: #68c062; overflow: hidden; }
+        #ui-bar { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
+        .ui-pill { background: rgba(0,0,0,0.7); color: #fff; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        canvas { width: 100%; height: 100%; display: block; }
+        #selection-modal, #offline-modal { position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; padding: 20px; }
+        .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; width: 100%; max-width: 320px; }
+        .select-card { background: #333; border: 2px solid #555; border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; transition: transform 0.1s; }
+        .select-card:active { transform: scale(0.95); border-color: #4CAF50; }
+        .select-card span { font-size: 32px; display: block; margin-bottom: 6px; }
+        .btn-action { background: #4CAF50; border: none; color: white; padding: 12px 28px; border-radius: 24px; font-weight: bold; font-size: 16px; margin-top: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="ui-bar">
+        <div class="ui-pill" id="coin-display">💰 0</div>
+        <div class="ui-pill" id="level-display">⭐ 主角 Lv.1</div>
+        <div class="ui-pill" id="bag-display">🎒 0/3</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 初始動物自選面板 -->
+    <div id="selection-modal" style="display: none;">
+        <h2>🐾 歡迎來到 Zoo Land！</h2>
+        <p style="margin-top: 8px; color: #ccc;">請自選您的第一隻起始動物：</p>
+        <div class="card-grid">
+            <div class="select-card" onclick="chooseStarter('chicken')"><span>🐔</span>小雞</div>
+            <div class="select-card" onclick="chooseStarter('cow')"><span>🥛</span>乳牛</div>
+            <div class="select-card" onclick="chooseStarter('dog')"><span>🐕</span>小狗</div>
+            <div class="select-card" onclick="chooseStarter('pig')"><span>🐷</span>小豬</div>
+        </div>
+    </div>
+
+    <!-- 離線收益面板 -->
+    <div id="offline-modal" style="display: none;">
+        <h2>🎉 歡迎回來！</h2>
+        <p style="margin-top: 12px;" id="offline-info">你在離開期間動物園為你賺取了：</p>
+        <h1 style="color: #ffd700; margin: 16px 0;" id="offline-coin-amount">+0 金幣</h1>
+        <button class="btn-action" onclick="claimOffline()">領取收益</button>
+    </div>
+</div>
+
+<script>
+const ANIMAL_DB = {
+    chicken: { name: '小雞', icon: '🐔', levelReq: 1, baseIncome: 2, spawnRate: 3 },
+    cow:     { name: '乳牛', icon: '🥛', levelReq: 1, baseIncome: 4, spawnRate: 4 },
+    dog:     { name: '小狗', icon: '🐕', levelReq: 1, baseIncome: 3, spawnRate: 3 },
+    pig:     { name: '小豬', icon: '🐷', levelReq: 2, baseIncome: 6, spawnRate: 4 },
+    horse:   { name: '小馬', icon: '🐎', levelReq: 3, baseIncome: 18, spawnRate: 5 },
+    snake:   { name: '靈蛇', icon: '🐍', levelReq: 4, baseIncome: 50, spawnRate: 6 },
+    giraffe: { name: '長頸鹿', icon: '🦒', levelReq: 5, baseIncome: 140, spawnRate: 7 },
+    rhino:   { name: '犀牛', icon: '🦏', levelReq: 6, baseIncome: 400, spawnRate: 8 }
+};
+
+const UPGRADE_COSTS = [150, 450, 1200, 3500, 10000, 30000];
+
+let gameState = {
+    coins: 0,
+    level: 1,
+    bagCapacity: 3,
+    bag: [],
+    pens: {},
+    unlockedAnimals: [],
+    lastTimestamp: Date.now()
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let width, height;
+
+function resize() {
+    width = canvas.width = canvas.parentElement.clientWidth;
+    height = canvas.height = canvas.parentElement.clientHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// 存檔與讀檔系統
+const SAVE_KEY = 'ZOOLAND_SAVE_V1';
+
+function saveGame() {
+    gameState.lastTimestamp = Date.now();
+    localStorage.setItem(SAVE_KEY, JSON.stringify(gameState));
+}
+
+function loadGame() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) {
+        document.getElementById('selection-modal').style.display = 'flex';
+        return;
+    }
+    try {
+        const saved = JSON.parse(raw);
+        gameState = { ...gameState, ...saved };
+        checkOfflineEarnings();
+    } catch(e) {
+        document.getElementById('selection-modal').style.display = 'flex';
+    }
+}
+
+function chooseStarter(type) {
+    gameState.unlockedAnimals = [type];
+    gameState.pens[type] = { count: 0, max: 10 };
+    document.getElementById('selection-modal').style.display = 'none';
+    saveGame();
+}
+
+let pendingOfflineCoins = 0;
+function checkOfflineEarnings() {
+    const now = Date.now();
+    const diffSec = Math.min(Math.floor((now - (gameState.lastTimestamp || now)) / 1000), 28800);
+    if (diffSec > 10) {
+        let perSec = 0;
+        for (let k in gameState.pens) {
+            perSec += (gameState.pens[k].count || 0) * (ANIMAL_DB[k]?.baseIncome || 1) * 0.2;
+        }
+        pendingOfflineCoins = Math.floor(diffSec * perSec);
+        if (pendingOfflineCoins > 0) {
+            document.getElementById('offline-coin-amount').innerText = `+${pendingOfflineCoins} 💰`;
+            document.getElementById('offline-modal').style.display = 'flex';
+        }
+    }
+}
+
+function claimOffline() {
+    gameState.coins += pendingOfflineCoins;
+    document.getElementById('offline-modal').style.display = 'none';
+    saveGame();
+}
+
+// 角色與搖桿操作
+const player = { x: 200, y: 400, speed: 4, size: 24 };
+const joystick = { active: false, startX: 0, startY: 0, curX: 0, curY: 0, dx: 0, dy: 0 };
+
+window.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    joystick.active = true;
+    joystick.startX = joystick.curX = t.clientX;
+    joystick.startY = joystick.curY = t.clientY;
+    joystick.dx = joystick.dy = 0;
+});
+
+window.addEventListener('touchmove', (e) => {
+    if (!joystick.active) return;
+    const t = e.touches[0];
+    joystick.curX = t.clientX;
+    joystick.curY = t.clientY;
+    const dist = Math.hypot(t.clientX - joystick.startX, t.clientY - joystick.startY);
+    const maxR = 40;
+    const angle = Math.atan2(t.clientY - joystick.startY, t.clientX - joystick.startX);
+    joystick.dx = Math.cos(angle) * Math.min(dist / maxR, 1);
+    joystick.dy = Math.sin(angle) * Math.min(dist / maxR, 1);
+});
+
+window.addEventListener('touchend', () => { joystick.active = false; joystick.dx = 0; joystick.dy = 0; });
+
+// 鍵盤控制支援
+const keys = {};
+window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+// 遊戲世界區域
+const wildZone = { x: 50, y: 80, w: 140, h: 140 };
+const penZone = { x: 230, y: 80, w: 140, h: 140 };
+const upgradeZone = { x: 140, y: 550, w: 120, h: 70 };
+
+let wildAnimals = [];
+let visitors = [];
+
+function spawnWildAnimal() {
+    if (wildAnimals.length >= 4 || gameState.unlockedAnimals.length === 0) return;
+    const randType = gameState.unlockedAnimals[Math.floor(Math.random() * gameState.unlockedAnimals.length)];
+    wildAnimals.push({
+        type: randType,
+        x: wildZone.x + 20 + Math.random() * (wildZone.w - 40),
+        y: wildZone.y + 20 + Math.random() * (wildZone.h - 40)
+    });
+}
+setInterval(spawnWildAnimal, 2000);
+
+// 遊客定時給錢
+setInterval(() => {
+    let totalIncome = 0;
+    for (let k in gameState.pens) {
+        totalIncome += (gameState.pens[k].count || 0) * ANIMAL_DB[k].baseIncome;
+    }
+    if (totalIncome > 0) {
+        gameState.coins += totalIncome;
+    }
+}, 1500);
+
+// 遊戲主循環
+function update() {
+    let mx = joystick.dx;
+    let my = joystick.dy;
+    if (keys['w'] || keys['arrowup']) my = -1;
+    if (keys['s'] || keys['arrowdown']) my = 1;
+    if (keys['a'] || keys['arrowleft']) mx = -1;
+    if (keys['d'] || keys['arrowright']) mx = 1;
+
+    player.x = Math.max(20, Math.min(width - 20, player.x + mx * player.speed));
+    player.y = Math.max(20, Math.min(height - 20, player.y + my * player.speed));
+
+    // 採集野外動物
+    for (let i = wildAnimals.length - 1; i >= 0; i--) {
+        const a = wildAnimals[i];
+        if (Math.hypot(player.x - a.x, player.y - a.y) < 30 && gameState.bag.length < gameState.bagCapacity) {
+            gameState.bag.push(a.type);
+            wildAnimals.splice(i, 1);
+        }
+    }
+
+    // 將動物放入展區
+    if (Math.hypot(player.x - (penZone.x + penZone.w/2), player.y - (penZone.y + penZone.h/2)) < 60) {
+        while (gameState.bag.length > 0) {
+            const animal = gameState.bag.pop();
+            if (!gameState.pens[animal]) gameState.pens[animal] = { count: 0 };
+            gameState.pens[animal].count++;
+        }
+    }
+
+    // 主角升級站判定
+    const cost = UPGRADE_COSTS[gameState.level - 1] || 999999;
+    if (Math.hypot(player.x - (upgradeZone.x + upgradeZone.w/2), player.y - (upgradeZone.y + upgradeZone.h/2)) < 50) {
+        if (gameState.coins >= cost && gameState.level < 6) {
+            gameState.coins -= cost;
+            gameState.level++;
+            // 解鎖對應等級動物
+            for (let k in ANIMAL_DB) {
+                if (ANIMAL_DB[k].levelReq <= gameState.level && !gameState.unlockedAnimals.includes(k)) {
+                    gameState.unlockedAnimals.push(k);
+                }
+            }
+            saveGame();
+        }
+    }
+
+    // 更新 UI
+    document.getElementById('coin-display').innerText = `💰 ${gameState.coins}`;
+    document.getElementById('level-display').innerText = `⭐ 主角 Lv.${gameState.level}`;
+    document.getElementById('bag-display').innerText = `🎒 ${gameState.bag.length}/${gameState.bagCapacity}`;
+}
+
+function render() {
+    ctx.clearRect(0, 0, width, height);
+
+    // 繪製野外探索區
+    ctx.fillStyle = '#4a9c46';
+    ctx.fillRect(wildZone.x, wildZone.y, wildZone.w, wildZone.h);
+    ctx.strokeStyle = '#fff';
+    ctx.strokeRect(wildZone.x, wildZone.y, wildZone.w, wildZone.h);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('🌲 野外捕捉區', wildZone.x + 10, wildZone.y - 8);
+
+    // 繪製展區
+    ctx.fillStyle = '#d2b48c';
+    ctx.fillRect(penZone.x, penZone.y, penZone.w, penZone.h);
+    ctx.strokeRect(penZone.x, penZone.y, penZone.w, penZone.h);
+    ctx.fillStyle = '#000';
+    let penCount = 0;
+    for (let k in gameState.pens) penCount += gameState.pens[k].count || 0;
+    ctx.fillText(`🦁 展區 (動物: ${penCount})`, penZone.x + 10, penZone.y - 8);
+
+    // 繪製升級台
+    const cost = UPGRADE_COSTS[gameState.level - 1] || 'MAX';
+    ctx.fillStyle = '#ff9800';
+    ctx.fillRect(upgradeZone.x, upgradeZone.y, upgradeZone.w, upgradeZone.h);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`⭐ 升級站`, upgradeZone.x + 30, upgradeZone.y + 28);
+    ctx.fillText(`💰 ${cost}`, upgradeZone.x + 35, upgradeZone.y + 48);
+
+    // 繪製野外動物
+    ctx.font = '20px sans-serif';
+    wildAnimals.forEach(a => ctx.fillText(ANIMAL_DB[a.type]?.icon || '🐾', a.x, a.y));
+
+    // 繪製主角與背包堆疊
+    ctx.fillStyle = '#2196F3';
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+    ctx.fill();
+
+    gameState.bag.forEach((type, idx) => {
+        ctx.font = '14px sans-serif';
+        ctx.fillText(ANIMAL_DB[type]?.icon || '🐾', player.x - 7, player.y - 25 - (idx * 16));
+    });
+}
+
+function loop() {
+    update();
+    render();
+    requestAnimationFrame(loop);
+}
+
+// 啟動
+loadGame();
+setInterval(saveGame, 3000);
+window.addEventListener('beforeunload', saveGame);
+loop();
+</script>
+</body>
+</html>
