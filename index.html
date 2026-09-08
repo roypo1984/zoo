@@ -2,9 +2,8 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <!-- 徹底鎖死視口縮放，禁止雙指捏合與點擊放大 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Zoo Land 3D - 可愛動物園大亨</title>
+    <title>Zoo Land 3D - 全身動物可愛版</title>
     <style>
         * { 
             box-sizing: border-box; 
@@ -15,7 +14,6 @@
             -webkit-touch-callout: none;
         }
         
-        /* 鎖死 HTML 與 Body 滾動與縮放 */
         html, body { 
             position: fixed;
             width: 100%; 
@@ -23,7 +21,7 @@
             overflow: hidden; 
             background: #161b13; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            touch-action: none; /* 關鍵：阻止所有原生瀏覽器手勢縮放 */
+            touch-action: none;
         }
 
         #canvas-container { 
@@ -35,7 +33,7 @@
             touch-action: none;
         }
         
-        /* 頂部 HUD 狀態欄 (適配瀏海屏安全區域) */
+        /* 頂部 HUD (適配瀏海屏安全區域) */
         #ui-layer { 
             position: fixed; 
             top: max(10px, env(safe-area-inset-top)); 
@@ -85,7 +83,7 @@
             transition: opacity 0.3s; 
         }
 
-        /* 全螢幕懸浮動態搖桿 (非移動時隱藏) */
+        /* 全螢幕動態懸浮搖桿 */
         #dynamic-joystick { 
             position: absolute; 
             width: 120px; 
@@ -128,14 +126,14 @@
             justify-content: center; 
             z-index: 200; 
             color: white; 
-            padding: 24px; 
+            padding: 20px; 
             touch-action: none;
         }
         .starter-grid { 
             display: grid; 
             grid-template-columns: repeat(2, 1fr); 
-            gap: 16px; 
-            margin-top: 20px; 
+            gap: 14px; 
+            margin-top: 18px; 
             width: 100%; 
             max-width: 340px; 
         }
@@ -143,7 +141,7 @@
             background: #263321; 
             border: 2px solid #476839; 
             border-radius: 18px; 
-            padding: 16px 10px; 
+            padding: 12px 8px; 
             text-align: center; 
             cursor: pointer; 
             transition: all 0.2s ease; 
@@ -153,39 +151,58 @@
             transform: translateY(-3px) scale(1.02); 
             background: #34472c; 
         }
-        .starter-card span { 
-            font-size: 40px; 
+        .starter-card img { 
+            width: 68px; 
+            height: 68px; 
             display: block; 
-            margin-bottom: 6px; 
+            margin: 0 auto 6px; 
+            object-fit: contain;
         }
         .btn-confirm { 
             background: #68b92e; 
             border: none; 
             color: white; 
-            padding: 12px 36px; 
-            border-radius: 30px; 
+            padding: 10px 32px; 
+            border-radius: 25px; 
             font-weight: bold; 
-            font-size: 16px; 
-            margin-top: 18px; 
+            font-size: 15px; 
+            margin-top: 14px; 
             cursor: pointer; 
             box-shadow: 0 4px 15px rgba(104, 185, 46, 0.5); 
         }
         
         .stats-table { 
             width: 100%; 
-            max-width: 420px; 
+            max-width: 440px; 
             border-collapse: collapse; 
-            margin-top: 14px; 
+            margin-top: 12px; 
             font-size: 13px; 
         }
         .stats-table th, .stats-table td { 
-            padding: 8px 6px; 
+            padding: 6px 4px; 
             text-align: center; 
             border-bottom: 1px solid rgba(255,255,255,0.15); 
         }
         .stats-table th { 
             background: rgba(255,255,255,0.1); 
             color: #ffd700; 
+        }
+        .backup-bar {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            max-width: 440px;
+        }
+        .backup-btn {
+            flex: 1;
+            padding: 8px;
+            background: #475569;
+            border: 1px solid #64748b;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -194,7 +211,7 @@
 
 <div id="canvas-container"></div>
 
-<!-- 頂部 HUD (永不消失與縮放) -->
+<!-- 頂部 HUD -->
 <div id="ui-layer">
     <div class="hud-card" id="hud-coins">💰 0</div>
     <div class="hud-card" id="hud-income" style="color: #ffd700;">⚡ +0/秒</div>
@@ -214,23 +231,18 @@
 <!-- 初始自選動物 -->
 <div id="starter-modal" class="modal-mask" style="display: none;">
     <h2>🌿 歡迎開拓 2.5D 動物園！</h2>
-    <p style="margin-top: 8px; color: #a9c79f;">請挑選您的第一隻初始明星動物：</p>
-    <div class="starter-grid">
-        <div class="starter-card" onclick="selectStarter('cow')"><span>🐮</span>乳牛 (COW)</div>
-        <div class="starter-card" onclick="selectStarter('dog')"><span>🐕</span>小狗 (DOG)</div>
-        <div class="starter-card" onclick="selectStarter('chicken')"><span>🐔</span>小雞 (CHICKEN)</div>
-        <div class="starter-card" onclick="selectStarter('pig')"><span>🐷</span>小豬 (PIG)</div>
-    </div>
+    <p style="margin-top: 6px; color: #a9c79f; font-size: 14px;">請挑選您的第一隻全身明星動物夥伴：</p>
+    <div class="starter-grid" id="starter-options"></div>
 </div>
 
-<!-- 園區財務報表 -->
+<!-- 園區財務報表 & 存檔備份面板 -->
 <div id="stats-modal" class="modal-mask" style="display: none;">
     <h2>📊 動物園營運財務報表</h2>
-    <p style="margin-top: 6px; color: #aaa;">即時展區產值與書包容量概況</p>
+    <p style="margin-top: 4px; color: #aaa; font-size: 12px;">即時展區產值、書包容量與存檔管理</p>
     <table class="stats-table">
         <thead>
             <tr>
-                <th>物種</th>
+                <th>全身物種</th>
                 <th>數量</th>
                 <th>單隻產能</th>
                 <th>秒總產值</th>
@@ -238,7 +250,13 @@
         </thead>
         <tbody id="stats-tbody"></tbody>
     </table>
-    <h3 style="margin-top: 14px; color: #ffd700;" id="stats-total-income">總產值：0 金幣/秒</h3>
+    <h3 style="margin-top: 10px; color: #ffd700; font-size: 15px;" id="stats-total-income">總產值：0 金幣/秒</h3>
+    
+    <div class="backup-bar">
+        <button class="backup-btn" onclick="exportSaveCode()">📋 複製存檔代碼</button>
+        <button class="backup-btn" onclick="importSaveCode()">📥 貼上代碼還原</button>
+    </div>
+
     <button class="btn-confirm" onclick="closeStatsModal()">關閉報表</button>
 </div>
 
@@ -246,12 +264,12 @@
 <div id="offline-modal" class="modal-mask" style="display: none;">
     <h2>🎉 園長歡迎回來！</h2>
     <p style="margin-top: 10px; color: #ccc;">離線期間收銀總站為您自動累計了：</p>
-    <h1 style="color: #ffd700; margin: 20px 0; font-size: 38px;" id="offline-val">+0 金幣</h1>
+    <h1 style="color: #ffd700; margin: 18px 0; font-size: 36px;" id="offline-val">+0 金幣</h1>
     <button class="btn-confirm" onclick="claimOfflineReward()">全部收下</button>
 </div>
 
 <script>
-// 防縮放底層攔截器 (防止 iOS Safari 手勢放大)
+// 防縮放底層手勢攔截器
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('gesturechange', (e) => e.preventDefault());
 document.addEventListener('gestureend', (e) => e.preventDefault());
@@ -259,28 +277,36 @@ document.addEventListener('gestureend', (e) => e.preventDefault());
 let lastTouchTime = 0;
 document.addEventListener('touchend', (e) => {
     const now = Date.now();
-    if (now - lastTouchTime <= 300) {
-        e.preventDefault(); // 禁止雙擊放大
-    }
+    if (now - lastTouchTime <= 300) e.preventDefault();
     lastTouchTime = now;
 }, { passive: false });
 
-// 動物數值與屬性庫
+// 8 大動物屬性庫
 const ANIMAL_CONFIG = {
-    chicken: { name: '小雞', emoji: '🐔', color: '#FFF3B0', income: 3, reqLv: 1 },
-    cow:     { name: '乳牛', emoji: '🐮', color: '#FFFFFF', income: 6, reqLv: 1 },
-    dog:     { name: '小狗', emoji: '🐕', color: '#FDE2BB', income: 5, reqLv: 1 },
-    pig:     { name: '小豬', emoji: '🐷', color: '#FBCFE8', income: 10, reqLv: 2 },
-    horse:   { name: '小馬', emoji: '🐎', color: '#E2D9D2', income: 25, reqLv: 3 },
-    snake:   { name: '靈蛇', emoji: '🐍', color: '#BBF7D0', income: 60, reqLv: 4 },
-    giraffe: { name: '長頸鹿', emoji: '🦒', color: '#FED7AA', income: 160, reqLv: 5 },
-    rhino:   { name: '犀牛', emoji: '🦏', color: '#E2E8F0', income: 450, reqLv: 6 }
+    chicken: { name: '小雞', width: 2.2, height: 2.2, income: 3, reqLv: 1 },
+    cow:     { name: '乳牛', width: 2.6, height: 2.3, income: 6, reqLv: 1 },
+    dog:     { name: '小狗', width: 2.4, height: 2.2, income: 5, reqLv: 1 },
+    pig:     { name: '小豬', width: 2.4, height: 2.2, income: 10, reqLv: 2 },
+    horse:   { name: '小馬', width: 2.6, height: 2.5, income: 25, reqLv: 3 },
+    snake:   { name: '靈蛇', width: 2.4, height: 2.2, income: 60, reqLv: 4 },
+    giraffe: { name: '長頸鹿', width: 2.8, height: 3.4, income: 160, reqLv: 5 },
+    rhino:   { name: '犀牛', width: 2.8, height: 2.4, income: 450, reqLv: 6 }
 };
 
-// 🎒 各等級對應的書包容量
 const BAG_CAPACITY_TIERS = [4, 6, 8, 10, 12, 15];
 const UPGRADE_COSTS = [200, 600, 1800, 5000, 15000, 999999];
-const STORAGE_KEY = 'ZOOLAND_PERSISTENT_DATA_PROD_V4';
+
+// 🌟 永久統一主鍵與過往歷史鍵相容列表
+const MASTER_STORAGE_KEY = 'ZOOLAND_MASTER_SAVE_STORE';
+const LEGACY_STORAGE_KEYS = [
+    'ZOOLAND_PERSISTENT_DATA_PROD_V4',
+    'ZOOLAND_PERSISTENT_DATA_PROD',
+    'ZOOLAND_25D_V3',
+    'ZOOLAND_25D_V2',
+    'ZOOLAND_25D_V1',
+    'ZOOLAND_3D_STORAGE_V1',
+    'ZOOLAND_SAVE_V1'
+];
 
 let gameState = {
     coins: 0,
@@ -292,12 +318,275 @@ let gameState = {
     lastTime: Date.now()
 };
 
-// 根據當前等級更新書包容量
 function updateBagCapacityByLevel() {
     gameState.bagCapacity = BAG_CAPACITY_TIERS[gameState.level - 1] || 15;
 }
 
-// 存檔模組
+// 🎨 ⭐ 全身 2D 可愛動物高解析度繪製引擎 (Canvas Vector Art)
+const textureCache = {};
+const canvasDataURLCache = {};
+
+function renderFullBodyAnimal(type) {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const ctx = c.getContext('2d');
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    switch (type) {
+        case 'chicken': // 1. 小雞 (全身黃羽、紅冠、尖嘴、翅膀、雞爪)
+            // 腳
+            ctx.strokeStyle = '#E67E22';
+            ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(110, 205); ctx.lineTo(110, 235); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(146, 205); ctx.lineTo(146, 235); ctx.stroke();
+            // 身體
+            ctx.fillStyle = '#FFD54F';
+            ctx.beginPath(); ctx.ellipse(128, 145, 65, 55, 0, 0, Math.PI * 2); ctx.fill();
+            // 翅膀
+            ctx.fillStyle = '#FFCA28';
+            ctx.beginPath(); ctx.ellipse(85, 145, 24, 34, 0.2, 0, Math.PI * 2); ctx.fill();
+            // 頭部
+            ctx.fillStyle = '#FFE082';
+            ctx.beginPath(); ctx.arc(128, 90, 42, 0, Math.PI * 2); ctx.fill();
+            // 雞冠
+            ctx.fillStyle = '#EF5350';
+            ctx.beginPath(); ctx.arc(114, 48, 12, 0, Math.PI*2); ctx.arc(128, 42, 14, 0, Math.PI*2); ctx.arc(142, 48, 12, 0, Math.PI*2); ctx.fill();
+            // 肉髯與尖嘴
+            ctx.beginPath(); ctx.arc(128, 114, 9, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#FF9800';
+            ctx.beginPath(); ctx.moveTo(120, 95); ctx.lineTo(136, 95); ctx.lineTo(128, 110); ctx.closePath(); ctx.fill();
+            // 眼睛
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.arc(112, 85, 6, 0, Math.PI*2); ctx.arc(144, 85, 6, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath(); ctx.arc(110, 83, 2, 0, Math.PI*2); ctx.arc(142, 83, 2, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case 'cow': // 2. 乳牛 (全身黑白花紋、四足黑蹄、雙角、粉色大鼻子、小尾巴)
+            // 4 條腿
+            ctx.fillStyle = '#E0E0E0';
+            ctx.fillRect(80, 175, 20, 45); ctx.fillRect(110, 175, 20, 45);
+            ctx.fillRect(150, 175, 20, 45); ctx.fillRect(180, 175, 20, 45);
+            ctx.fillStyle = '#424242';
+            ctx.fillRect(80, 212, 20, 12); ctx.fillRect(110, 212, 20, 12);
+            ctx.fillRect(150, 212, 20, 12); ctx.fillRect(180, 212, 20, 12);
+            // 尾巴
+            ctx.strokeStyle = '#FFF'; ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(200, 145); ctx.quadraticCurveTo(230, 160, 225, 185); ctx.stroke();
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.arc(225, 185, 8, 0, Math.PI*2); ctx.fill();
+            // 軀幹
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath(); ctx.roundRect(75, 115, 135, 75, 30); ctx.fill();
+            // 黑斑點
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.ellipse(140, 135, 26, 18, 0.4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(185, 150, 18, 14, -0.2, 0, Math.PI*2); ctx.fill();
+            // 頭部
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath(); ctx.arc(75, 105, 38, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.arc(58, 85, 16, 0, Math.PI*2); ctx.fill();
+            // 牛角與耳朵
+            ctx.fillStyle = '#FFE082';
+            ctx.beginPath(); ctx.arc(60, 68, 8, 0, Math.PI*2); ctx.arc(90, 68, 8, 0, Math.PI*2); ctx.fill();
+            // 粉紅大鼻子
+            ctx.fillStyle = '#F48FB1';
+            ctx.beginPath(); ctx.ellipse(65, 122, 24, 16, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#880E4F';
+            ctx.beginPath(); ctx.arc(56, 122, 4, 0, Math.PI*2); ctx.arc(74, 122, 4, 0, Math.PI*2); ctx.fill();
+            // 眼睛
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.arc(78, 96, 5, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case 'dog': // 3. 小狗 (全身焦糖色、四隻爪子、垂耳、黑鼻頭、翹尾巴)
+            // 四肢
+            ctx.fillStyle = '#D7A15C';
+            ctx.fillRect(85, 175, 18, 45); ctx.fillRect(115, 175, 18, 45);
+            ctx.fillRect(150, 175, 18, 45); ctx.fillRect(175, 175, 18, 45);
+            // 翹尾巴
+            ctx.strokeStyle = '#D7A15C'; ctx.lineWidth = 10;
+            ctx.beginPath(); ctx.moveTo(195, 135); ctx.quadraticCurveTo(225, 120, 225, 95); ctx.stroke();
+            // 身體
+            ctx.fillStyle = '#EBB678';
+            ctx.beginPath(); ctx.roundRect(80, 120, 120, 68, 28); ctx.fill();
+            // 白肚兜
+            ctx.fillStyle = '#FFF8E7';
+            ctx.beginPath(); ctx.ellipse(130, 160, 35, 18, 0, 0, Math.PI*2); ctx.fill();
+            // 頭部
+            ctx.fillStyle = '#EBB678';
+            ctx.beginPath(); ctx.arc(75, 100, 36, 0, Math.PI*2); ctx.fill();
+            // 耳朵
+            ctx.fillStyle = '#B07238';
+            ctx.beginPath(); ctx.ellipse(50, 95, 12, 24, -0.4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(100, 95, 12, 24, 0.4, 0, Math.PI*2); ctx.fill();
+            // 嘴吻與黑鼻
+            ctx.fillStyle = '#FFF8E7';
+            ctx.beginPath(); ctx.ellipse(75, 115, 18, 14, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.arc(75, 108, 6, 0, Math.PI*2); ctx.fill();
+            // 眼睛
+            ctx.beginPath(); ctx.arc(63, 92, 5, 0, Math.PI*2); ctx.arc(87, 92, 5, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case 'pig': // 4. 小豬 (全身粉嫩圓胖、四隻小蹄、大豬鼻、捲捲尾)
+            // 4 條小短腿
+            ctx.fillStyle = '#F48FB1';
+            ctx.fillRect(85, 180, 18, 40); ctx.fillRect(115, 180, 18, 40);
+            ctx.fillRect(150, 180, 18, 40); ctx.fillRect(175, 180, 18, 40);
+            ctx.fillStyle = '#C2185B';
+            ctx.fillRect(85, 212, 18, 10); ctx.fillRect(115, 212, 18, 10);
+            ctx.fillRect(150, 212, 18, 10); ctx.fillRect(175, 212, 18, 10);
+            // 螺旋捲尾巴
+            ctx.strokeStyle = '#F48FB1'; ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.arc(210, 145, 14, 0, Math.PI*1.6); ctx.stroke();
+            // 圓滾滾身軀
+            ctx.fillStyle = '#F8BBD0';
+            ctx.beginPath(); ctx.roundRect(75, 110, 130, 80, 36); ctx.fill();
+            // 頭部
+            ctx.fillStyle = '#F8BBD0';
+            ctx.beginPath(); ctx.arc(75, 100, 38, 0, Math.PI*2); ctx.fill();
+            // 三角耳朵
+            ctx.fillStyle = '#EC407A';
+            ctx.beginPath(); ctx.moveTo(50, 70); ctx.lineTo(65, 85); ctx.lineTo(45, 90); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(100, 70); ctx.lineTo(85, 85); ctx.lineTo(105, 90); ctx.closePath(); ctx.fill();
+            // 大豬鼻
+            ctx.fillStyle = '#F06292';
+            ctx.beginPath(); ctx.ellipse(65, 115, 20, 14, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#880E4F';
+            ctx.beginPath(); ctx.arc(58, 115, 4, 0, Math.PI*2); ctx.arc(72, 115, 4, 0, Math.PI*2); ctx.fill();
+            // 眼睛
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.arc(78, 88, 5, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case 'horse': // 5. 小馬 (栗色健美身軀、鬃毛、長長馬尾、蹄子)
+            // 4 條長腿與馬蹄
+            ctx.fillStyle = '#8D6E63';
+            ctx.fillRect(80, 165, 18, 55); ctx.fillRect(110, 165, 18, 55);
+            ctx.fillRect(160, 165, 18, 55); ctx.fillRect(185, 165, 18, 55);
+            ctx.fillStyle = '#3E2723';
+            ctx.fillRect(80, 210, 18, 12); ctx.fillRect(110, 210, 18, 12);
+            ctx.fillRect(160, 210, 18, 12); ctx.fillRect(185, 210, 18, 12);
+            // 飄逸長尾
+            ctx.strokeStyle = '#4E342E'; ctx.lineWidth = 12;
+            ctx.beginPath(); ctx.moveTo(205, 125); ctx.quadraticCurveTo(235, 150, 230, 195); ctx.stroke();
+            // 身體
+            ctx.fillStyle = '#A1887F';
+            ctx.beginPath(); ctx.roundRect(75, 110, 135, 68, 28); ctx.fill();
+            // 脖子與頭部
+            ctx.beginPath(); ctx.moveTo(75, 130); ctx.lineTo(55, 65); ctx.lineTo(95, 65); ctx.lineTo(110, 120); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(60, 68, 26, 18, -0.3, 0, Math.PI*2); ctx.fill();
+            // 黑色馬鬃
+            ctx.fillStyle = '#3E2723';
+            ctx.beginPath(); ctx.arc(90, 70, 12, 0, Math.PI*2); ctx.arc(100, 90, 14, 0, Math.PI*2); ctx.arc(108, 110, 14, 0, Math.PI*2); ctx.fill();
+            // 眼睛與鼻吻
+            ctx.fillStyle = '#4E342E';
+            ctx.beginPath(); ctx.ellipse(45, 75, 12, 10, -0.3, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.arc(68, 62, 5, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case 'snake': // 6. 靈蛇 (翠綠S型優雅蛇身、亮黃腹鱗、大萌眼、分叉舌頭)
+            ctx.strokeStyle = '#43A047'; ctx.lineWidth = 32;
+            ctx.beginPath();
+            ctx.moveTo(70, 100);
+            ctx.bezierCurveTo(110, 60, 130, 170, 170, 130);
+            ctx.bezierCurveTo(200, 100, 210, 180, 160, 210);
+            ctx.bezierCurveTo(120, 230, 90, 180, 60, 200);
+            ctx.stroke();
+            // 黃腹花紋
+            ctx.strokeStyle = '#FFEE58'; ctx.lineWidth = 12;
+            ctx.beginPath();
+            ctx.moveTo(85, 105);
+            ctx.bezierCurveTo(115, 75, 135, 160, 165, 135);
+            ctx.bezierCurveTo(190, 110, 195, 170, 160, 195);
+            ctx.stroke();
+            // 蛇頭
+            ctx.fillStyle = '#66BB6A';
+            ctx.beginPath(); ctx.arc(65, 95, 26, 0, Math.PI*2); ctx.fill();
+            // 紅色分叉舌頭
+            ctx.strokeStyle = '#E53935'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(42, 95); ctx.lineTo(26, 95); ctx.lineTo(18, 90); ctx.moveTo(26, 95); ctx.lineTo(18, 100); ctx.stroke();
+            // 萌眼
+            ctx.fillStyle = '#212121';
+            ctx.beginPath(); ctx.arc(60, 86, 6, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath(); ctx.arc(58, 84, 2, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case 'giraffe': // 7. 長頸鹿 (全身黃底棕斑、經典超長脖子、頭頂雙萌角、長腿)
+            // 4 條細長腿
+            ctx.fillStyle = '#F57C00';
+            ctx.fillRect(85, 170, 14, 60); ctx.fillRect(110, 170, 14, 60);
+            ctx.fillRect(150, 170, 14, 60); ctx.fillRect(170, 170, 14, 60);
+            // 身體
+            ctx.fillStyle = '#FFB74D';
+            ctx.beginPath(); ctx.roundRect(80, 120, 105, 60, 24); ctx.fill();
+            // 超長脖子
+            ctx.beginPath(); ctx.moveTo(85, 135); ctx.lineTo(70, 45); ctx.lineTo(98, 45); ctx.lineTo(115, 135); ctx.closePath(); ctx.fill();
+            // 斑點花紋
+            ctx.fillStyle = '#E65100';
+            ctx.beginPath(); ctx.arc(88, 70, 7, 0, Math.PI*2); ctx.arc(92, 95, 8, 0, Math.PI*2); ctx.arc(98, 118, 9, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(130, 145, 14, 10, 0.2, 0, Math.PI*2); ctx.ellipse(160, 140, 12, 9, -0.3, 0, Math.PI*2); ctx.fill();
+            // 頭部與小角
+            ctx.fillStyle = '#FFA726';
+            ctx.beginPath(); ctx.ellipse(75, 45, 18, 14, -0.2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#E65100';
+            ctx.beginPath(); ctx.arc(68, 28, 5, 0, Math.PI*2); ctx.arc(82, 28, 5, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#FFA726'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(68, 32); ctx.lineTo(68, 40); ctx.moveTo(82, 32); ctx.lineTo(82, 40); ctx.stroke();
+            // 眼睛
+            ctx.fillStyle = '#212121'; ctx.beginPath(); ctx.arc(74, 42, 4, 0, Math.PI*2); ctx.fill();
+            break;
+
+        case 'rhino': // 8. 犀牛 (灰藍色厚實身軀、粗壯四肢、威武雙角、短小尾)
+            // 4 條粗壯柱子腿
+            ctx.fillStyle = '#78909C';
+            ctx.fillRect(80, 165, 24, 55); ctx.fillRect(115, 165, 24, 55);
+            ctx.fillRect(160, 165, 24, 55); ctx.fillRect(190, 165, 24, 55);
+            ctx.fillStyle = '#37474F';
+            ctx.fillRect(80, 210, 24, 12); ctx.fillRect(115, 210, 24, 12);
+            ctx.fillRect(160, 210, 24, 12); ctx.fillRect(190, 210, 24, 12);
+            // 身體
+            ctx.fillStyle = '#90A4AE';
+            ctx.beginPath(); ctx.roundRect(75, 105, 145, 75, 32); ctx.fill();
+            // 裝甲褶皺
+            ctx.strokeStyle = '#607D8B'; ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.moveTo(130, 105); ctx.lineTo(130, 180); ctx.stroke();
+            // 大頭部
+            ctx.fillStyle = '#90A4AE';
+            ctx.beginPath(); ctx.roundRect(40, 95, 60, 50, 18); ctx.fill();
+            // 象牙白雙角
+            ctx.fillStyle = '#ECEFF1';
+            ctx.beginPath(); ctx.moveTo(40, 110); ctx.lineTo(20, 85); ctx.lineTo(48, 100); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(56, 100); ctx.lineTo(45, 80); ctx.lineTo(62, 92); ctx.closePath(); ctx.fill();
+            // 眼睛
+            ctx.fillStyle = '#212121'; ctx.beginPath(); ctx.arc(75, 110, 5, 0, Math.PI*2); ctx.fill();
+            break;
+    }
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.needsUpdate = true;
+    textureCache[type] = tex;
+    canvasDataURLCache[type] = c.toDataURL();
+    return tex;
+}
+
+function getFullBodyTexture(type) {
+    if (textureCache[type]) return textureCache[type];
+    return renderFullBodyAnimal(type);
+}
+
+// 預先生成所有 8 種全身紋理
+for (let key in ANIMAL_CONFIG) {
+    renderFullBodyAnimal(key);
+}
+
+// 💾 ⭐ 萬能存檔引擎（自動尋找並無損遷移所有歷史版本存檔）
 let saveTimer = null;
 function flashSaveIndicator() {
     const el = document.getElementById('save-indicator');
@@ -311,7 +600,7 @@ function saveState(immediate = false) {
     gameState.lastTime = Date.now();
     const doSave = () => {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(gameState));
+            localStorage.setItem(MASTER_STORAGE_KEY, JSON.stringify(gameState));
             flashSaveIndicator();
         } catch(err) {
             console.error('Save Error:', err);
@@ -328,20 +617,54 @@ function saveState(immediate = false) {
 }
 
 function loadState() {
+    let loadedData = null;
+    
+    // 1. 優先載入主鍵
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && Array.isArray(parsed.unlockedAnimals) && parsed.unlockedAnimals.length > 0) {
-                gameState = { ...gameState, ...parsed };
-                updateBagCapacityByLevel(); // 確保書包容量與等級同步
-                calcOffline();
-                return true;
-            }
+        const raw = localStorage.getItem(MASTER_STORAGE_KEY);
+        if (raw) loadedData = JSON.parse(raw);
+    } catch(e) {}
+
+    // 2. 若無主鍵，依序向下掃描相容歷史版本存檔
+    if (!loadedData || !Array.isArray(loadedData.unlockedAnimals) || loadedData.unlockedAnimals.length === 0) {
+        for (let legacyKey of LEGACY_STORAGE_KEYS) {
+            try {
+                const legacyRaw = localStorage.getItem(legacyKey);
+                if (legacyRaw) {
+                    const parsed = JSON.parse(legacyRaw);
+                    if (parsed && Array.isArray(parsed.unlockedAnimals) && parsed.unlockedAnimals.length > 0) {
+                        loadedData = parsed;
+                        console.log(`[Save Migration] 成功繼承歷史存檔: ${legacyKey}`);
+                        break;
+                    }
+                }
+            } catch(e) {}
         }
-    } catch(err) {
-        console.error('Load Error:', err);
     }
+
+    // 3. 成功載入與結構自動修復
+    if (loadedData && Array.isArray(loadedData.unlockedAnimals) && loadedData.unlockedAnimals.length > 0) {
+        gameState = { ...gameState, ...loadedData };
+        updateBagCapacityByLevel();
+        saveState(true); // 即刻升級持久化至主鍵
+        calcOffline();
+        return true;
+    }
+
+    // 4. 全新遊玩：構建開局全身自選卡片
+    const container = document.getElementById('starter-options');
+    container.innerHTML = '';
+    ['cow', 'dog', 'chicken', 'pig'].forEach(type => {
+        const conf = ANIMAL_CONFIG[type];
+        const card = document.createElement('div');
+        card.className = 'starter-card';
+        card.onclick = () => selectStarter(type);
+        card.innerHTML = `
+            <img src="${canvasDataURLCache[type]}" alt="${conf.name}">
+            <b>${conf.name}</b>
+        `;
+        container.appendChild(card);
+    });
     document.getElementById('starter-modal').style.display = 'flex';
     return false;
 }
@@ -354,6 +677,36 @@ function selectStarter(type) {
     document.getElementById('starter-modal').style.display = 'none';
     spawnPenAnimalSprite(type);
     saveState(true);
+}
+
+// 存檔代碼導出與導入
+function exportSaveCode() {
+    const code = btoa(encodeURIComponent(JSON.stringify(gameState)));
+    navigator.clipboard.writeText(code).then(() => {
+        alert('✅ 存檔代碼已成功複製至剪貼簿！可妥善保管。');
+    }).catch(() => {
+        prompt('請複製您的存檔代碼：', code);
+    });
+}
+
+function importSaveCode() {
+    const code = prompt('請貼上您先前複製的存檔代碼：');
+    if (!code) return;
+    try {
+        const json = decodeURIComponent(atob(code));
+        const parsed = JSON.parse(json);
+        if (parsed && Array.isArray(parsed.unlockedAnimals)) {
+            gameState = { ...gameState, ...parsed };
+            updateBagCapacityByLevel();
+            saveState(true);
+            alert('🎉 存檔還原成功！點擊確定重新加載。');
+            window.location.reload();
+        } else {
+            alert('❌ 存檔代碼格式無效。');
+        }
+    } catch(err) {
+        alert('❌ 存檔代碼解析失敗。');
+    }
 }
 
 function calculateIncomePerSec() {
@@ -369,18 +722,19 @@ function calculateIncomePerSec() {
 function openStatsModal() {
     const tbody = document.getElementById('stats-tbody');
     tbody.innerHTML = '';
-    let grandTotal = 0;
 
     for (let k in ANIMAL_CONFIG) {
         const conf = ANIMAL_CONFIG[k];
         const isUnlocked = gameState.unlockedAnimals.includes(k);
         const count = gameState.penAnimals[k] || 0;
         const subTotal = count * conf.income;
-        grandTotal += subTotal;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${conf.emoji} ${conf.name}</td>
+            <td style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                <img src="${canvasDataURLCache[k]}" style="width:28px; height:28px; object-fit:contain;">
+                ${conf.name}
+            </td>
             <td>${isUnlocked ? count + ' 隻' : '<span style="color:#888;">未解鎖(Lv.'+conf.reqLv+')</span>'}</td>
             <td>${conf.income} 💰/次</td>
             <td style="color:${count > 0 ? '#68d391' : '#888'}; font-weight:bold;">+${subTotal} 💰</td>
@@ -417,36 +771,7 @@ function claimOfflineReward() {
     saveState(true);
 }
 
-// 2D 紋理與告示牌生成
-const textureCache = {};
-function getCuteSpriteTexture(emoji, bgColor = '#FFFFFF') {
-    const key = `${emoji}_${bgColor}`;
-    if (textureCache[key]) return textureCache[key];
-
-    const c = document.createElement('canvas');
-    c.width = 128;
-    c.height = 128;
-    const ctx = c.getContext('2d');
-
-    ctx.fillStyle = bgColor;
-    ctx.beginPath();
-    ctx.arc(64, 64, 56, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.stroke();
-
-    ctx.font = '64px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(emoji, 64, 68);
-
-    const tex = new THREE.CanvasTexture(c);
-    tex.needsUpdate = true;
-    textureCache[key] = tex;
-    return tex;
-}
-
+// 3D 告示牌
 function createLocationBannerTexture(title, subtitle, badgeColor) {
     const c = document.createElement('canvas');
     c.width = 512;
@@ -476,7 +801,7 @@ function createLocationBannerTexture(title, subtitle, badgeColor) {
     return tex;
 }
 
-// 3D 場景建構
+// 3D 場景
 let scene, camera, renderer;
 let playerGroup, playerSprite, bagSpriteGroup;
 
@@ -524,6 +849,7 @@ function init3D() {
     createEnvironment();
     create2DPlayer();
     
+    // 還原展區內所有全身動物
     for (let type in gameState.penAnimals) {
         for (let i = 0; i < gameState.penAnimals[type]; i++) {
             spawnPenAnimalSprite(type);
@@ -608,9 +934,24 @@ function create2DPlayer() {
     playerGroup = new THREE.Group();
     playerGroup.position.set(0, 0, 0);
 
-    const pTex = getCuteSpriteTexture('🤠', '#60A5FA');
-    const pMat = new THREE.SpriteMaterial({ map: pTex });
-    playerSprite = new THREE.Sprite(pMat);
+    // 繪製全身 Q 版園長
+    const pc = document.createElement('canvas');
+    pc.width = 256; pc.height = 256;
+    const pctx = pc.getContext('2d');
+    pctx.fillStyle = '#1E88E5'; // 藍色工作服
+    pctx.beginPath(); pctx.roundRect(85, 120, 86, 75, 20); pctx.fill();
+    pctx.fillStyle = '#1565C0'; // 褲腿
+    pctx.fillRect(95, 190, 26, 45); pctx.fillRect(135, 190, 26, 45);
+    pctx.fillStyle = '#FFE0B2'; // 臉部
+    pctx.beginPath(); pctx.arc(128, 90, 36, 0, Math.PI*2); pctx.fill();
+    pctx.fillStyle = '#8D6E63'; // 牛仔帽
+    pctx.beginPath(); pctx.ellipse(128, 65, 55, 14, 0, 0, Math.PI*2); pctx.fill();
+    pctx.beginPath(); pctx.roundRect(100, 35, 56, 35, 10); pctx.fill();
+    pctx.fillStyle = '#212121'; // 眼睛微笑
+    pctx.beginPath(); pctx.arc(116, 90, 4, 0, Math.PI*2); pctx.arc(140, 90, 4, 0, Math.PI*2); pctx.fill();
+
+    const pTex = new THREE.CanvasTexture(pc);
+    playerSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: pTex }));
     playerSprite.scale.set(2.4, 2.4, 1);
     playerSprite.position.y = 1.2;
     playerGroup.add(playerSprite);
@@ -622,17 +963,18 @@ function create2DPlayer() {
     scene.add(playerGroup);
 }
 
+// 背包背負全身動物堆疊
 function updateBackpackSprites() {
     if (!bagSpriteGroup) return;
     while(bagSpriteGroup.children.length > 0) {
         bagSpriteGroup.remove(bagSpriteGroup.children[0]);
     }
     gameState.bag.forEach((type, idx) => {
-        const conf = ANIMAL_CONFIG[type] || { emoji: '🐾', color: '#FFF' };
-        const tex = getCuteSpriteTexture(conf.emoji, conf.color);
+        const conf = ANIMAL_CONFIG[type] || { width: 2.2, height: 2.2 };
+        const tex = getFullBodyTexture(type);
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-        sp.scale.set(1.4, 1.4, 1);
-        sp.position.set(0, (idx + 1) * 0.95, 0);
+        sp.scale.set(conf.width * 0.7, conf.height * 0.7, 1);
+        sp.position.set(0, (idx + 1) * 0.9, 0);
         bagSpriteGroup.add(sp);
     });
 }
@@ -658,40 +1000,49 @@ function dropCoinInCashBooth() {
     groundCoins.push({ mesh, value: 12 + gameState.level * 6, rotSpeed: 0.05 });
 }
 
+// 生成野外【全身】動物
 function spawnWildAnimalSprite() {
     if (wildAnimalSprites.length >= 5 || gameState.unlockedAnimals.length === 0) return;
     const type = gameState.unlockedAnimals[Math.floor(Math.random() * gameState.unlockedAnimals.length)];
     const conf = ANIMAL_CONFIG[type];
 
-    const tex = getCuteSpriteTexture(conf.emoji, conf.color);
+    const tex = getFullBodyTexture(type);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-    sp.scale.set(2.0, 2.0, 1);
+    sp.scale.set(conf.width, conf.height, 1);
 
     const r = Math.random() * 5.5;
     const ang = Math.random() * Math.PI * 2;
-    sp.position.set(wildZoneCenter.x + Math.cos(ang) * r, 1.0, wildZoneCenter.z + Math.sin(ang) * r);
+    sp.position.set(wildZoneCenter.x + Math.cos(ang) * r, conf.height * 0.45, wildZoneCenter.z + Math.sin(ang) * r);
     scene.add(sp);
     wildAnimalSprites.push({ sprite: sp, type });
 }
 setInterval(spawnWildAnimalSprite, 2000);
 
+// 生成展區內漫步的【全身】動物
 function spawnPenAnimalSprite(type) {
-    const conf = ANIMAL_CONFIG[type] || { emoji: '🐾', color: '#FFF' };
-    const tex = getCuteSpriteTexture(conf.emoji, conf.color);
+    const conf = ANIMAL_CONFIG[type] || { width: 2.2, height: 2.2 };
+    const tex = getFullBodyTexture(type);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-    sp.scale.set(1.9, 1.9, 1);
+    sp.scale.set(conf.width, conf.height, 1);
 
     const r = Math.random() * 6.5;
     const ang = Math.random() * Math.PI * 2;
-    sp.position.set(penZoneCenter.x + Math.cos(ang) * r, 1.0, penZoneCenter.z + Math.sin(ang) * r);
+    sp.position.set(penZoneCenter.x + Math.cos(ang) * r, conf.height * 0.45, penZoneCenter.z + Math.sin(ang) * r);
     scene.add(sp);
     penAnimalSprites.push({ sprite: sp, basePos: sp.position.clone(), wanderOffset: Math.random() * 10 });
 }
 
 function spawnVisitors() {
-    const visitorEmojis = ['👧', '👦', '👩', '👴', '👱'];
     for (let i = 0; i < 4; i++) {
-        const tex = getCuteSpriteTexture(visitorEmojis[i % visitorEmojis.length], '#F472B6');
+        const vc = document.createElement('canvas');
+        vc.width = 128; vc.height = 128;
+        const vctx = vc.getContext('2d');
+        vctx.fillStyle = '#EC407A';
+        vctx.beginPath(); vctx.arc(64, 64, 52, 0, Math.PI*2); vctx.fill();
+        vctx.font = '64px sans-serif'; vctx.textAlign = 'center'; vctx.textBaseline = 'middle';
+        vctx.fillText(['👧', '👦', '👩', '👱'][i], 64, 68);
+
+        const tex = new THREE.CanvasTexture(vc);
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
         sp.scale.set(2.0, 2.0, 1);
         const ang = (i / 4) * Math.PI * 2;
@@ -710,7 +1061,7 @@ setInterval(() => {
     }
 }, 1800);
 
-// ⭐ 全螢幕動態搖桿（防止手勢穿透與意外縮放）
+// 全螢幕懸浮搖桿
 const joyContainer = document.getElementById('dynamic-joystick');
 const joyThumb = document.getElementById('joy-thumb');
 let activeTouchId = null;
@@ -719,9 +1070,7 @@ let joyOrigin = { x: 0, y: 0 };
 const moveDir = { x: 0, z: 0 };
 
 function handlePointerStart(clientX, clientY) {
-    // 忽略頂部按鈕區域
     if (clientY < 75) return;
-    
     isPointerDown = true;
     joyOrigin = { x: clientX, y: clientY };
     joyContainer.style.left = `${clientX}px`;
@@ -753,7 +1102,6 @@ function handlePointerEnd() {
     moveDir.x = 0; moveDir.z = 0;
 }
 
-// 觸控監聽 (嚴格鎖定首個有效觸摸，防止多指縮放)
 window.addEventListener('touchstart', e => {
     if (activeTouchId !== null) return;
     const t = e.changedTouches[0];
@@ -769,7 +1117,7 @@ window.addEventListener('touchmove', e => {
         const t = e.changedTouches[i];
         if (t.identifier === activeTouchId) {
             handlePointerMove(t.clientX, t.clientY);
-            e.preventDefault(); // 阻止畫面滾動/縮放
+            e.preventDefault();
             break;
         }
     }
@@ -785,7 +1133,6 @@ window.addEventListener('touchend', e => {
 });
 window.addEventListener('touchcancel', handlePointerEnd);
 
-// 滑鼠拖曳支援
 window.addEventListener('mousedown', e => {
     if (e.button === 0 && e.clientY >= 75) handlePointerStart(e.clientX, e.clientY);
 });
@@ -831,7 +1178,7 @@ function animate() {
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, playerGroup.position.z + 18, 0.08);
     camera.lookAt(playerGroup.position.x, 0, playerGroup.position.z);
 
-    // 2. 展區動物微幅漫步
+    // 2. 展區動物漫步
     penAnimalSprites.forEach(p => {
         p.sprite.position.x = p.basePos.x + Math.sin(elapsedTime + p.wanderOffset) * 0.8;
         p.sprite.position.z = p.basePos.z + Math.cos(elapsedTime + p.wanderOffset) * 0.8;
@@ -855,7 +1202,7 @@ function animate() {
     }
     if (pickedCoin) saveState(false);
 
-    // 4. 野外動物捕捉 (受升級後的書包容量限制)
+    // 4. 野外動物捕捉
     for (let i = wildAnimalSprites.length - 1; i >= 0; i--) {
         const a = wildAnimalSprites[i];
         if (playerGroup.position.distanceTo(a.sprite.position) < 2.2 && gameState.bag.length < gameState.bagCapacity) {
@@ -876,13 +1223,13 @@ function animate() {
         saveState(true);
     }
 
-    // 6. 升級判定 (升級等級 + 升級書包容量 + 解鎖新動物)
+    // 6. 升級判定 (等級 + 書包擴容 + 解鎖全身動物)
     const cost = UPGRADE_COSTS[gameState.level - 1] || 999999;
     if (playerGroup.position.distanceTo(upgradePadPos) < 3.2) {
         if (gameState.coins >= cost && gameState.level < 6) {
             gameState.coins -= cost;
             gameState.level++;
-            updateBagCapacityByLevel(); // ⭐ 核心：同步提升書包容量
+            updateBagCapacityByLevel();
             for (let k in ANIMAL_CONFIG) {
                 if (ANIMAL_CONFIG[k].reqLv <= gameState.level && !gameState.unlockedAnimals.includes(k)) {
                     gameState.unlockedAnimals.push(k);
@@ -910,12 +1257,12 @@ function onWindowResize() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 }
 
-// 啟動入口
+// 啟動入口 (自動執行歷史存檔遷移)
 loadState();
 init3D();
 animate();
 
-// 自動備份存檔
+// 週期持久化
 setInterval(() => saveState(true), 2500);
 window.addEventListener('pagehide', () => saveState(true));
 window.addEventListener('visibilitychange', () => {
